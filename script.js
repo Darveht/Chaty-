@@ -297,10 +297,17 @@ function proceedWithVerification(phoneNumber) {
         avatar: `https://api.dicebear.com/7.x/avataaars/svg?seed=${phoneNumber.replace(/\D/g, '')}`
     };
 
-    // Registrar usuario en Firebase inmediatamente
-    database.ref('users/' + userId).set(newUserData)
+    // Registrar usuario en Firebase inmediatamente con número indexado
+    const userPromise = database.ref('users/' + userId).set(newUserData);
+    const phoneIndexPromise = database.ref('phoneNumbers/' + phoneNumber.replace(/\D/g, '')).set({
+        phoneNumber: phoneNumber,
+        userId: userId,
+        registeredAt: firebase.database.ServerValue.TIMESTAMP
+    });
+
+    Promise.all([userPromise, phoneIndexPromise])
         .then(() => {
-            console.log('Usuario registrado en Firebase:', phoneNumber);
+            console.log('Usuario y número registrados en Firebase:', phoneNumber);
             
             // Guardar código generado globalmente
             confirmationResult = {
@@ -1358,21 +1365,43 @@ function addContact() {
     addBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Buscando...';
     addBtn.disabled = true;
 
-    // Buscar usuario en Firebase por número de teléfono
-    database.ref('users').orderByChild('phoneNumber').equalTo(fullNumber).once('value')
+    // Buscar primero en el índice de números de teléfono
+    const phoneKey = fullNumber.replace(/\D/g, '');
+    database.ref('phoneNumbers/' + phoneKey).once('value')
+        .then(phoneSnapshot => {
+            if (phoneSnapshot.exists()) {
+                const phoneData = phoneSnapshot.val();
+                const userId = phoneData.userId;
+                
+                // Obtener datos completos del usuario
+                return database.ref('users/' + userId).once('value');
+            } else {
+                // Fallback: buscar en usuarios directamente
+                return database.ref('users').orderByChild('phoneNumber').equalTo(fullNumber).once('value');
+            }
+        })
         .then(snapshot => {
-            const users = snapshot.val();
-            
             addBtn.innerHTML = originalText;
             addBtn.disabled = false;
 
-            if (users) {
-                const userId = Object.keys(users)[0];
-                const user = users[userId];
+            let user = null;
+            let userId = null;
+
+            if (snapshot.val()) {
+                if (snapshot.key) {
+                    // Resultado directo del usuario
+                    user = snapshot.val();
+                    userId = snapshot.key;
+                } else {
+                    // Resultado de búsqueda por número
+                    const users = snapshot.val();
+                    userId = Object.keys(users)[0];
+                    user = users[userId];
+                }
 
                 console.log('Usuario encontrado:', user);
 
-                if (user.uid === currentUser.uid) {
+                if (userId === currentUser.uid) {
                     showErrorMessage('No puedes agregarte a ti mismo');
                     return;
                 }
@@ -1384,6 +1413,8 @@ function addContact() {
                             hideAddContact();
                             showErrorMessage('Este usuario ya está en tu lista de contactos');
                         } else {
+                            // Asegurar que el usuario tiene UID
+                            user.uid = userId;
                             // Mostrar tarjeta del usuario encontrado
                             showUserFoundCard(user);
                         }
@@ -1465,77 +1496,139 @@ function sendFriendRequest(targetUserId, targetUserPhone) {
         fromAvatar: currentUser.avatar || `https://api.dicebear.com/7.x/avataaars/svg?seed=${currentUser.phoneNumber}`,
         to: targetUserId,
         toPhone: targetUserPhone,
-        timestamp: firebase.database.ServerValue.TIMESTAMP,
+        timestamp: Date.now(), // Usar timestamp directo para mejor compatibilidad
         status: 'pending'
     };
 
     // Cerrar tarjeta de usuario
     closeUserFoundCard();
 
-    // Enviar solicitud real a Firebase
-    database.ref(`friendRequests/${targetUserId}/${requestId}`).set(requestData)
+    console.log('Enviando solicitud de amistad:', requestData);
+
+    // Enviar solicitud y notificaciones en paralelo
+    const promises = [];
+
+    // 1. Guardar solicitud principal
+    promises.push(database.ref(`friendRequests/${targetUserId}/${requestId}`).set(requestData));
+
+    // 2. Crear notificación directa
+    const notificationData = {
+        type: 'friend_request',
+        from: currentUser.uid,
+        fromPhone: currentUser.phoneNumber,
+        fromAvatar: currentUser.avatar || `https://api.dicebear.com/7.x/avataaars/svg?seed=${currentUser.phoneNumber}`,
+        requestId: requestId,
+        timestamp: Date.now(),
+        read: false
+    };
+    promises.push(database.ref(`notifications/${targetUserId}`).push(notificationData));
+
+    // 3. Actualizar flag de notificación en perfil del usuario
+    promises.push(database.ref(`users/${targetUserId}/lastNotification`).set({
+        type: 'friend_request',
+        from: currentUser.phoneNumber,
+        timestamp: Date.now(),
+        requestId: requestId
+    }));
+
+    // 4. Crear entrada en solicitudes pendientes globales
+    promises.push(database.ref(`globalNotifications/${targetUserId}_${requestId}`).set({
+        type: 'friend_request',
+        targetUser: targetUserId,
+        fromUser: currentUser.uid,
+        fromPhone: currentUser.phoneNumber,
+        requestId: requestId,
+        timestamp: Date.now(),
+        processed: false
+    }));
+
+    Promise.all(promises)
         .then(() => {
-            console.log('Solicitud enviada exitosamente a Firebase');
+            console.log('Solicitud y notificaciones enviadas exitosamente a Firebase');
             showInstantNotification(`✅ Solicitud enviada a ${targetUserPhone}`, 'friend-request');
             
-            // Crear notificación para el destinatario
-            const notificationData = {
-                type: 'friend_request',
-                from: currentUser.uid,
-                fromPhone: currentUser.phoneNumber,
-                fromAvatar: currentUser.avatar || `https://api.dicebear.com/7.x/avataaars/svg?seed=${currentUser.phoneNumber}`,
-                requestId: requestId,
-                timestamp: firebase.database.ServerValue.TIMESTAMP,
-                read: false
-            };
-            
-            // Enviar notificación instantánea al destinatario
-            database.ref(`notifications/${targetUserId}`).push(notificationData);
+            // Forzar actualización inmediata en el destinatario si está online
+            database.ref(`users/${targetUserId}/status`).once('value').then(statusSnapshot => {
+                if (statusSnapshot.val() === 'online') {
+                    console.log('Usuario destinatario está online, notificación debería llegar inmediatamente');
+                }
+            });
             
         })
         .catch(error => {
-            console.error('Error enviando solicitud:', error);
+            console.error('Error enviando solicitud completa:', error);
             showErrorMessage('Error enviando solicitud. Intenta de nuevo.');
         });
 }
 
 // Función para configurar listener de solicitudes de amistad
 function setupFriendRequestsListener() {
-    if (!currentUser || !currentUser.uid) return;
+    if (!currentUser || !currentUser.uid) {
+        console.error('No se puede configurar listener: usuario no disponible');
+        return;
+    }
 
     console.log('Configurando listener de solicitudes para:', currentUser.uid);
 
     // Limpiar listener anterior
     if (friendRequestsListener) {
         friendRequestsListener.off();
+        friendRequestsListener = null;
     }
 
-    // Configurar listener para solicitudes entrantes
-    friendRequestsListener = database.ref(`friendRequests/${currentUser.uid}`);
-    friendRequestsListener.on('child_added', (snapshot) => {
-        const request = snapshot.val();
-        const requestId = snapshot.key;
+    // Configurar listener para solicitudes entrantes con error handling
+    try {
+        friendRequestsListener = database.ref(`friendRequests/${currentUser.uid}`);
         
-        console.log('Nueva solicitud detectada:', request);
-        
-        if (request && request.status === 'pending') {
-            // Mostrar notificación instantánea
-            showInstantNotification(`📱 Solicitud de ${request.fromPhone}`, 'friend-request');
+        friendRequestsListener.on('child_added', (snapshot) => {
+            const request = snapshot.val();
+            const requestId = snapshot.key;
             
-            // Mostrar modal después de un breve delay
+            console.log('Nueva solicitud detectada en tiempo real:', request);
+            
+            if (request && request.status === 'pending') {
+                // Verificar que no sea una solicitud antigua
+                const requestTime = request.timestamp;
+                const now = Date.now();
+                const oneHourAgo = now - (60 * 60 * 1000);
+                
+                if (requestTime > oneHourAgo || typeof requestTime === 'object') {
+                    // Mostrar notificación instantánea
+                    showInstantNotification(`📱 Nueva solicitud de ${request.fromPhone}`, 'friend-request');
+                    
+                    // Mostrar modal después de un breve delay
+                    setTimeout(() => {
+                        showFriendRequestModal(request, requestId);
+                    }, 1500);
+                }
+            }
+        });
+
+        // Escuchar cambios en solicitudes existentes
+        friendRequestsListener.on('child_changed', (snapshot) => {
+            const request = snapshot.val();
+            const requestId = snapshot.key;
+            console.log('Solicitud actualizada:', request);
+            
+            if (request && request.status === 'accepted') {
+                console.log('Solicitud aceptada detectada:', requestId);
+            }
+        });
+
+        // Manejar errores de conexión
+        friendRequestsListener.on('error', (error) => {
+            console.error('Error en listener de solicitudes:', error);
+            // Reintentar configurar listener después de 5 segundos
             setTimeout(() => {
-                showFriendRequestModal(request, requestId);
-            }, 1000);
-        }
-    });
+                setupFriendRequestsListener();
+            }, 5000);
+        });
 
-    // También escuchar cambios en tiempo real
-    friendRequestsListener.on('child_changed', (snapshot) => {
-        const request = snapshot.val();
-        console.log('Solicitud actualizada:', request);
-    });
-
-    console.log('Listener de solicitudes configurado correctamente');
+        console.log('Listener de solicitudes configurado correctamente para:', currentUser.uid);
+        
+    } catch (error) {
+        console.error('Error configurando listener de solicitudes:', error);
+    }
 }
 
 // Función para mostrar solicitud de amistad en pantalla completa
@@ -2317,14 +2410,22 @@ function checkAuthState() {
 
 // Configurar listener para notificaciones
 function setupNotificationsListener() {
-    if (!currentUser || !currentUser.uid) return;
+    if (!currentUser || !currentUser.uid) {
+        console.error('No se puede configurar listener de notificaciones: usuario no disponible');
+        return;
+    }
 
+    console.log('Configurando listener de notificaciones para:', currentUser.uid);
+
+    // Configurar múltiples listeners para asegurar detección en tiempo real
+    
+    // 1. Listener de notificaciones directas
     database.ref(`notifications/${currentUser.uid}`).on('child_added', (snapshot) => {
         const notification = snapshot.val();
         const notificationId = snapshot.key;
         
         if (notification && !notification.read) {
-            console.log('Nueva notificación recibida:', notification);
+            console.log('Nueva notificación directa recibida:', notification);
             
             if (notification.type === 'friend_request') {
                 // Buscar la solicitud completa
@@ -2341,6 +2442,56 @@ function setupNotificationsListener() {
             }
         }
     });
+
+    // 2. Listener global de cambios en tiempo real
+    database.ref(`users/${currentUser.uid}/lastNotification`).on('value', (snapshot) => {
+        const lastNotification = snapshot.val();
+        if (lastNotification && lastNotification.type === 'friend_request') {
+            console.log('Notificación detectada via usuario:', lastNotification);
+            // Buscar solicitudes pendientes
+            database.ref(`friendRequests/${currentUser.uid}`).orderByChild('status').equalTo('pending').once('value')
+                .then(requestsSnapshot => {
+                    const requests = requestsSnapshot.val();
+                    if (requests) {
+                        const requestIds = Object.keys(requests);
+                        const latestRequestId = requestIds[requestIds.length - 1];
+                        const latestRequest = requests[latestRequestId];
+                        
+                        if (latestRequest && Date.now() - latestRequest.timestamp < 30000) {
+                            showFriendRequestModal(latestRequest, latestRequestId);
+                        }
+                    }
+                });
+        }
+    });
+
+    // 3. Polling de respaldo cada 10 segundos para asegurar detección
+    const pollingInterval = setInterval(() => {
+        if (currentUser && currentUser.uid) {
+            database.ref(`friendRequests/${currentUser.uid}`).orderByChild('status').equalTo('pending').once('value')
+                .then(snapshot => {
+                    const requests = snapshot.val();
+                    if (requests) {
+                        Object.keys(requests).forEach(requestId => {
+                            const request = requests[requestId];
+                            // Solo mostrar solicitudes recientes (últimos 2 minutos)
+                            if (Date.now() - request.timestamp < 120000) {
+                                // Verificar si ya se mostró esta solicitud
+                                if (!window.shownRequests) window.shownRequests = new Set();
+                                if (!window.shownRequests.has(requestId)) {
+                                    window.shownRequests.add(requestId);
+                                    showFriendRequestModal(request, requestId);
+                                }
+                            }
+                        });
+                    }
+                });
+        } else {
+            clearInterval(pollingInterval);
+        }
+    }, 10000);
+
+    console.log('Listeners de notificaciones configurados completamente');
 }
 
 // Mantener la conexión activa
