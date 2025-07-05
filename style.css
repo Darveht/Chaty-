@@ -917,6 +917,222 @@ body {
     color: var(--text-primary);
 }
 
+/* Modal de usuario encontrado */
+.user-found-modal {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100vh;
+    background: rgba(0, 0, 0, 0.8);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 10000;
+    animation: fadeIn 0.3s ease-out;
+}
+
+.user-found-content {
+    background: var(--background);
+    border-radius: 20px;
+    padding: 2rem;
+    max-width: 450px;
+    width: 90%;
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+    animation: modalSlideIn 0.3s ease-out;
+}
+
+.user-found-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 2rem;
+    padding-bottom: 1rem;
+    border-bottom: 1px solid var(--border-color);
+}
+
+.user-found-header h2 {
+    color: var(--text-primary);
+    font-size: 1.5rem;
+    margin: 0;
+}
+
+.close-card-btn {
+    background: none;
+    border: none;
+    font-size: 1.2rem;
+    color: var(--text-secondary);
+    cursor: pointer;
+    padding: 0.5rem;
+    border-radius: 50%;
+    transition: var(--transition);
+}
+
+.close-card-btn:hover {
+    background: var(--surface);
+    color: var(--text-primary);
+}
+
+.user-card {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    margin: 2rem 0;
+    padding: 1.5rem;
+    background: var(--surface);
+    border-radius: 12px;
+    border: 1px solid var(--border-color);
+}
+
+.user-avatar {
+    position: relative;
+}
+
+.user-avatar img {
+    width: 60px;
+    height: 60px;
+    border-radius: 50%;
+    object-fit: cover;
+}
+
+.user-info {
+    flex: 1;
+}
+
+.user-info h3 {
+    font-size: 1.2rem;
+    margin: 0 0 0.5rem 0;
+    font-weight: 600;
+}
+
+.user-status {
+    margin: 0.25rem 0;
+    font-size: 0.9rem;
+    font-weight: 500;
+}
+
+.user-joined {
+    margin: 0;
+    font-size: 0.8rem;
+    color: var(--text-secondary);
+}
+
+.user-actions {
+    display: flex;
+    gap: 1rem;
+    margin-top: 2rem;
+}
+
+.user-actions button {
+    flex: 1;
+}
+
+/* Pantalla de solicitud de amistad */
+.friend-request-container {
+    display: flex;
+    flex-direction: column;
+    height: 100vh;
+    background: var(--background);
+    padding: 2rem;
+    max-width: 500px;
+    margin: 0 auto;
+    justify-content: center;
+}
+
+.request-header {
+    text-align: center;
+    margin-bottom: 3rem;
+}
+
+.request-icon {
+    width: 80px;
+    height: 80px;
+    background: linear-gradient(135deg, var(--accent-color), #27ae60);
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin: 0 auto 1.5rem;
+    animation: pulse 2s infinite;
+}
+
+.request-icon i {
+    font-size: 2rem;
+    color: white;
+}
+
+.request-header h1 {
+    font-size: 1.8rem;
+    margin-bottom: 0.5rem;
+    font-weight: 700;
+    color: var(--text-primary);
+}
+
+.request-subtitle {
+    color: var(--text-secondary);
+    font-size: 1rem;
+}
+
+.request-content {
+    margin: 2rem 0;
+}
+
+.requester-card {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    padding: 2rem;
+    background: var(--surface);
+    border-radius: 16px;
+    margin-bottom: 2rem;
+    border: 1px solid var(--border-color);
+}
+
+.requester-avatar img {
+    width: 70px;
+    height: 70px;
+    border-radius: 50%;
+    object-fit: cover;
+}
+
+.requester-info h2 {
+    font-size: 1.3rem;
+    margin: 0 0 0.5rem 0;
+    font-weight: 600;
+}
+
+.request-time {
+    color: var(--text-secondary);
+    font-size: 0.9rem;
+    margin: 0;
+}
+
+.request-message {
+    padding: 1.5rem;
+    background: rgba(0, 168, 84, 0.1);
+    border-radius: 12px;
+    border-left: 4px solid var(--accent-color);
+}
+
+.request-message p {
+    margin: 0;
+    line-height: 1.5;
+    color: var(--text-secondary);
+}
+
+.request-actions {
+    display: flex;
+    gap: 1rem;
+    margin-top: 3rem;
+}
+
+.request-actions button {
+    flex: 1;
+    padding: 1rem;
+    font-size: 1rem;
+    font-weight: 600;
+}
+
 /* Modal de errores y éxito */
 .error-modal, .success-modal {
     position: fixed;
