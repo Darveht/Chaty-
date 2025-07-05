@@ -842,97 +842,77 @@ function showDeviceApprovalModal(approvalData, approvalId, userId) {
     
     approvalScreen.innerHTML = `
         <div class="device-approval-container">
-            <div class="approval-header-fullscreen">
-                <div class="security-icon-large">
+            <div class="approval-header">
+                <div class="security-icon">
                     <i class="fas fa-shield-alt"></i>
                 </div>
-                <h1>🔐 Solicitud de Acceso Detectada</h1>
+                <h1>Solicitud de Acceso Detectada</h1>
                 <p class="approval-subtitle">Alguien está intentando acceder a tu cuenta desde otro dispositivo</p>
             </div>
             
-            <div class="approval-content-fullscreen">
-                <div class="device-details-fullscreen">
-                    <h2>📱 Información del Dispositivo Solicitante:</h2>
-                    <div class="detail-grid-fullscreen">
-                        <div class="detail-card">
-                            <div class="detail-icon"><i class="fas fa-mobile-alt"></i></div>
-                            <div class="detail-info">
-                                <span class="detail-label">Tipo de Dispositivo</span>
-                                <span class="detail-value">${deviceInfo.deviceType}</span>
-                            </div>
+            <div class="approval-content">
+                <div class="device-details">
+                    <h2>Información del Dispositivo:</h2>
+                    <div class="detail-list">
+                        <div class="detail-item">
+                            <span class="detail-label">Dispositivo</span>
+                            <span class="detail-value">${deviceInfo.deviceType}</span>
                         </div>
-                        <div class="detail-card">
-                            <div class="detail-icon"><i class="fas fa-map-marker-alt"></i></div>
-                            <div class="detail-info">
-                                <span class="detail-label">Ubicación</span>
-                                <span class="detail-value">${deviceInfo.ipLocation}</span>
-                            </div>
+                        <div class="detail-item">
+                            <span class="detail-label">Ubicación</span>
+                            <span class="detail-value">${deviceInfo.ipLocation}</span>
                         </div>
-                        <div class="detail-card">
-                            <div class="detail-icon"><i class="fas fa-desktop"></i></div>
-                            <div class="detail-info">
-                                <span class="detail-label">Plataforma</span>
-                                <span class="detail-value">${deviceInfo.platform}</span>
-                            </div>
+                        <div class="detail-item">
+                            <span class="detail-label">Plataforma</span>
+                            <span class="detail-value">${deviceInfo.platform}</span>
                         </div>
-                        <div class="detail-card">
-                            <div class="detail-icon"><i class="fas fa-language"></i></div>
-                            <div class="detail-info">
-                                <span class="detail-label">Idioma</span>
-                                <span class="detail-value">${deviceInfo.language}</span>
-                            </div>
+                        <div class="detail-item">
+                            <span class="detail-label">Idioma</span>
+                            <span class="detail-value">${deviceInfo.language}</span>
                         </div>
-                        <div class="detail-card">
-                            <div class="detail-icon"><i class="fas fa-clock"></i></div>
-                            <div class="detail-info">
-                                <span class="detail-label">Zona Horaria</span>
-                                <span class="detail-value">${deviceInfo.timezone}</span>
-                            </div>
+                        <div class="detail-item">
+                            <span class="detail-label">Zona Horaria</span>
+                            <span class="detail-value">${deviceInfo.timezone}</span>
                         </div>
-                        <div class="detail-card">
-                            <div class="detail-icon"><i class="fas fa-calendar"></i></div>
-                            <div class="detail-info">
-                                <span class="detail-label">Momento de Solicitud</span>
-                                <span class="detail-value">${requestTime}</span>
-                            </div>
+                        <div class="detail-item">
+                            <span class="detail-label">Solicitud</span>
+                            <span class="detail-value">${requestTime}</span>
                         </div>
                     </div>
                 </div>
                 
-                <div class="security-warning-fullscreen">
-                    <div class="warning-icon-large">
+                <div class="security-warning">
+                    <div class="warning-icon">
                         <i class="fas fa-exclamation-triangle"></i>
                     </div>
                     <div class="warning-text">
-                        <h3>⚠️ Importante: Verificación de Seguridad</h3>
-                        <p>Si no reconoces este dispositivo o no autorizaste este acceso, <strong>deniega inmediatamente</strong> la solicitud.</p>
-                        <p>Si apruebas el acceso, el nuevo dispositivo tendrá acceso completo a tu cuenta y mensajes.</p>
+                        <h3>Verificación de Seguridad</h3>
+                        <p>Si no reconoces este dispositivo, deniega la solicitud inmediatamente.</p>
+                        <p>Al aprobar, el dispositivo tendrá acceso completo a tu cuenta.</p>
                     </div>
                 </div>
                 
-                <div class="approval-countdown-fullscreen">
+                <div class="approval-countdown">
                     <div class="countdown-display">
-                        <div class="countdown-circle">
+                        <div class="countdown-timer">
                             <span id="approval-countdown-large">60</span>
                         </div>
-                        <p>Segundos restantes para decidir</p>
+                        <p>segundos restantes</p>
                     </div>
-                    <div class="countdown-bar-fullscreen">
-                        <div class="countdown-progress-fullscreen" id="countdown-progress-fullscreen"></div>
+                    <div class="countdown-bar">
+                        <div class="countdown-progress" id="countdown-progress-fullscreen"></div>
                     </div>
                 </div>
             </div>
             
-            <div class="approval-actions-fullscreen">
-                <button class="deny-btn-fullscreen" onclick="denyDeviceAccess('${approvalId}', '${userId}')">
-                    <i class="fas fa-shield-alt"></i>
-                    <span>Denegar y Bloquear</span>
-                    <small>Bloquear dispositivo por 10 minutos</small>
+            <div class="approval-actions">
+                <button class="secondary-btn deny-btn" onclick="denyDeviceAccess('${approvalId}', '${userId}')">
+                    <i class="fas fa-times"></i>
+                    <span>Denegar</span>
                 </button>
-                <button class="approve-btn-fullscreen" onclick="approveDeviceAccess('${approvalId}', '${userId}')">
-                    <i class="fas fa-check-circle"></i>
-                    <span>Aprobar Acceso</span>
-                    <small>Permitir acceso a mi cuenta</small>
+                <button class="primary-btn approve-btn" onclick="approveDeviceAccess('${approvalId}', '${userId}')">
+                    <i class="fas fa-check"></i>
+                    <span>Aprobar</span>
                 </button>
             </div>
         </div>
