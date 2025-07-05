@@ -41,6 +41,19 @@ let moderationSystem = {
 };
 let currentWarning = null;
 
+// Sistema de detección de sesiones concurrentes
+let sessionManager = {
+    currentSessionId: null,
+    deviceInfo: null,
+    loginAttemptListener: null,
+    pendingApproval: null,
+    blockedUntil: null
+};
+
+// Variables para modal de aprobación de dispositivo
+let deviceApprovalModal = null;
+let approvalTimeout = null;
+
 // Traducciones de la interfaz
 const translations = {
     es: {
@@ -178,6 +191,83 @@ function sendVerificationCode() {
     currentPhoneNumber = fullNumber;
     document.getElementById('phone-display').textContent = fullNumber;
 
+    // Verificar si hay bloqueo temporal activo
+    if (sessionManager.blockedUntil && Date.now() < sessionManager.blockedUntil) {
+        const timeLeft = Math.ceil((sessionManager.blockedUntil - Date.now()) / 60000);
+        showErrorMessage(`Acceso bloqueado temporalmente. Intenta de nuevo en ${timeLeft} minutos.`);
+        return;
+    }
+
+    // Verificar si el número ya está en uso por otra sesión activa
+    checkExistingSession(fullNumber);
+
+    }
+
+// Función para verificar sesiones existentes
+function checkExistingSession(phoneNumber) {
+    const sendBtn = document.getElementById('send-code-btn');
+    const originalText = sendBtn.innerHTML;
+    sendBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Verificando...';
+    sendBtn.disabled = true;
+
+    // Buscar si hay sesiones activas con este número
+    database.ref('activeSessions').orderByChild('phoneNumber').equalTo(phoneNumber)
+        .once('value')
+        .then(snapshot => {
+            const activeSessions = snapshot.val() || {};
+            const sessionKeys = Object.keys(activeSessions);
+            
+            if (sessionKeys.length > 0) {
+                // Hay una sesión activa, solicitar aprobación
+                const activeSession = activeSessions[sessionKeys[0]];
+                requestLoginApproval(phoneNumber, activeSession.userId, activeSession.sessionId);
+            } else {
+                // No hay sesiones activas, proceder normalmente
+                proceedWithVerification(phoneNumber);
+            }
+            
+            sendBtn.innerHTML = originalText;
+            sendBtn.disabled = false;
+        })
+        .catch(error => {
+            console.error('Error verificando sesiones:', error);
+            sendBtn.innerHTML = originalText;
+            sendBtn.disabled = false;
+            showErrorMessage('Error verificando sesión. Intenta de nuevo.');
+        });
+}
+
+// Función para solicitar aprobación de inicio de sesión
+function requestLoginApproval(phoneNumber, existingUserId, existingSessionId) {
+    const deviceInfo = getDeviceFingerprint();
+    const loginRequestId = Date.now().toString();
+    
+    // Crear solicitud de aprobación en Firebase
+    const approvalRequest = {
+        id: loginRequestId,
+        phoneNumber: phoneNumber,
+        requestingDevice: deviceInfo,
+        timestamp: firebase.database.ServerValue.TIMESTAMP,
+        status: 'pending',
+        approvedBy: null
+    };
+    
+    database.ref(`loginApprovals/${existingUserId}/${loginRequestId}`).set(approvalRequest)
+        .then(() => {
+            console.log('Solicitud de aprobación enviada');
+            showLoginRequestPending(deviceInfo);
+            
+            // Escuchar respuesta de aprobación
+            listenForApprovalResponse(existingUserId, loginRequestId, phoneNumber);
+        })
+        .catch(error => {
+            console.error('Error enviando solicitud:', error);
+            showErrorMessage('Error enviando solicitud de aprobación.');
+        });
+}
+
+// Función para proceder con verificación normal
+function proceedWithVerification(phoneNumber) {
     // Mostrar loading en el botón
     const sendBtn = document.getElementById('send-code-btn');
     const originalText = sendBtn.innerHTML;
@@ -198,15 +288,16 @@ function sendVerificationCode() {
     }
 
     // Enviar SMS real con Firebase
-    firebase.auth().signInWithPhoneNumber(fullNumber, recaptchaVerifier)
+    firebase.auth().signInWithPhoneNumber(phoneNumber, recaptchaVerifier)
         .then(function(result) {
             confirmationResult = result;
             console.log('SMS enviado exitosamente');
             
-            sendBtn.innerHTML = originalText;
+            const sendBtn = document.getElementById('send-code-btn');
+            sendBtn.innerHTML = sendBtn.getAttribute('data-original-text') || 'Enviar código';
             sendBtn.disabled = false;
             
-            showSuccessMessage(`Código enviado a ${fullNumber}`);
+            showSuccessMessage(`Código enviado a ${phoneNumber}`);
             
             setTimeout(() => {
                 switchScreen('verification');
@@ -215,7 +306,8 @@ function sendVerificationCode() {
         })
         .catch(function(error) {
             console.error('Error enviando SMS:', error);
-            sendBtn.innerHTML = originalText;
+            const sendBtn = document.getElementById('send-code-btn');
+            sendBtn.innerHTML = sendBtn.getAttribute('data-original-text') || 'Enviar código';
             sendBtn.disabled = false;
             
             if (error.code === 'auth/too-many-requests') {
@@ -232,6 +324,108 @@ function sendVerificationCode() {
                 recaptchaVerifier = null;
             }
         });
+}
+
+// Función para obtener huella digital del dispositivo
+function getDeviceFingerprint() {
+    const canvas = document.createElement('canvas');
+    const ctx = canvas.getContext('2d');
+    ctx.textBaseline = 'top';
+    ctx.font = '14px Arial';
+    ctx.fillText('Device fingerprint', 2, 2);
+    
+    return {
+        userAgent: navigator.userAgent,
+        screen: `${screen.width}x${screen.height}`,
+        timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+        language: navigator.language,
+        platform: navigator.platform,
+        canvasFingerprint: canvas.toDataURL(),
+        timestamp: Date.now(),
+        ipLocation: 'Unknown', // En producción usarías una API de geolocalización
+        deviceType: /Mobile|Android|iP(ad|od|hone)/.test(navigator.userAgent) ? 'Mobile' : 'Desktop'
+    };
+}
+
+// Función para mostrar solicitud pendiente
+function showLoginRequestPending(deviceInfo) {
+    const pendingModal = document.createElement('div');
+    pendingModal.className = 'login-pending-modal';
+    pendingModal.innerHTML = `
+        <div class="pending-content">
+            <div class="pending-icon">
+                <i class="fas fa-clock"></i>
+            </div>
+            <h2>🔐 Verificación de Seguridad</h2>
+            <p>Este número ya está en uso en otro dispositivo.</p>
+            <div class="device-info">
+                <h4>📱 Tu dispositivo:</h4>
+                <p><strong>Tipo:</strong> ${deviceInfo.deviceType}</p>
+                <p><strong>Ubicación:</strong> ${deviceInfo.ipLocation}</p>
+                <p><strong>Navegador:</strong> ${deviceInfo.userAgent.substring(0, 50)}...</p>
+            </div>
+            <div class="pending-message">
+                <p>Se ha enviado una solicitud de aprobación al dispositivo autorizado.</p>
+                <p>El usuario debe aprobar tu acceso para continuar.</p>
+            </div>
+            <div class="pending-animation">
+                <div class="pulse-dot"></div>
+                <div class="pulse-dot"></div>
+                <div class="pulse-dot"></div>
+            </div>
+            <button class="secondary-btn" onclick="cancelLoginRequest()">
+                <i class="fas fa-times"></i>
+                Cancelar solicitud
+            </button>
+        </div>
+    `;
+    
+    document.body.appendChild(pendingModal);
+    sessionManager.pendingApproval = pendingModal;
+}
+
+// Función para escuchar respuesta de aprobación
+function listenForApprovalResponse(userId, requestId, phoneNumber) {
+    const approvalRef = database.ref(`loginApprovals/${userId}/${requestId}`);
+    
+    approvalRef.on('value', snapshot => {
+        const approval = snapshot.val();
+        
+        if (approval && approval.status === 'approved') {
+            console.log('Inicio de sesión aprobado');
+            closePendingModal();
+            proceedWithVerification(phoneNumber);
+            approvalRef.off(); // Detener listener
+        } else if (approval && approval.status === 'denied') {
+            console.log('Inicio de sesión denegado');
+            closePendingModal();
+            
+            // Bloquear por 10 minutos
+            sessionManager.blockedUntil = Date.now() + (10 * 60 * 1000);
+            showErrorMessage('Acceso denegado por el usuario autorizado. Bloqueado por 10 minutos.');
+            approvalRef.off(); // Detener listener
+        }
+    });
+    
+    // Timeout después de 2 minutos
+    setTimeout(() => {
+        approvalRef.off();
+        if (sessionManager.pendingApproval) {
+            closePendingModal();
+            showErrorMessage('Tiempo de espera agotado. La solicitud de aprobación expiró.');
+        }
+    }, 120000); // 2 minutos
+}
+
+function cancelLoginRequest() {
+    closePendingModal();
+}
+
+function closePendingModal() {
+    if (sessionManager.pendingApproval) {
+        document.body.removeChild(sessionManager.pendingApproval);
+        sessionManager.pendingApproval = null;
+    }
 }
 
 function goToRegister() {
@@ -306,10 +500,17 @@ function verifyCode() {
                 .then(() => {
                     console.log('Usuario guardado en Firebase Database:', currentUser);
                     
+                    // Crear sesión activa
+                    createActiveSession(user.uid, user.phoneNumber);
+                    
                     // Configurar persistencia de autenticación
                     firebase.auth().setPersistence(firebase.auth.Auth.Persistence.LOCAL)
                         .then(() => {
                             console.log('Persistencia configurada');
+                            
+                            // Configurar listener para solicitudes de aprobación
+                            setupLoginApprovalListener(user.uid);
+                            
                             setTimeout(() => {
                                 loadUserContacts();
                                 switchScreen('chat-list');
@@ -561,9 +762,214 @@ window.addEventListener('blur', () => {
 });
 
 // Función para cerrar sesión
+// Función para crear sesión activa
+function createActiveSession(userId, phoneNumber) {
+    sessionManager.currentSessionId = Date.now().toString();
+    sessionManager.deviceInfo = getDeviceFingerprint();
+    
+    const sessionData = {
+        sessionId: sessionManager.currentSessionId,
+        userId: userId,
+        phoneNumber: phoneNumber,
+        deviceInfo: sessionManager.deviceInfo,
+        createdAt: firebase.database.ServerValue.TIMESTAMP,
+        lastActivity: firebase.database.ServerValue.TIMESTAMP
+    };
+    
+    // Guardar sesión activa
+    database.ref(`activeSessions/${sessionManager.currentSessionId}`).set(sessionData);
+    
+    // Actualizar actividad cada 30 segundos
+    sessionManager.activityInterval = setInterval(() => {
+        if (sessionManager.currentSessionId) {
+            database.ref(`activeSessions/${sessionManager.currentSessionId}/lastActivity`)
+                .set(firebase.database.ServerValue.TIMESTAMP);
+        }
+    }, 30000);
+}
+
+// Función para configurar listener de solicitudes de aprobación
+function setupLoginApprovalListener(userId) {
+    if (sessionManager.loginAttemptListener) {
+        sessionManager.loginAttemptListener.off();
+    }
+    
+    sessionManager.loginAttemptListener = database.ref(`loginApprovals/${userId}`);
+    sessionManager.loginAttemptListener.on('child_added', (snapshot) => {
+        const approval = snapshot.val();
+        if (approval && approval.status === 'pending') {
+            showDeviceApprovalModal(approval, snapshot.key, userId);
+        }
+    });
+}
+
+// Función para mostrar modal de aprobación de dispositivo
+function showDeviceApprovalModal(approvalData, approvalId, userId) {
+    // Cerrar modal anterior si existe
+    if (deviceApprovalModal) {
+        document.body.removeChild(deviceApprovalModal);
+    }
+    
+    const deviceInfo = approvalData.requestingDevice;
+    const requestTime = new Date(approvalData.timestamp).toLocaleString();
+    
+    deviceApprovalModal = document.createElement('div');
+    deviceApprovalModal.className = 'device-approval-modal';
+    deviceApprovalModal.innerHTML = `
+        <div class="approval-content">
+            <div class="approval-header">
+                <div class="security-icon">
+                    <i class="fas fa-shield-alt"></i>
+                </div>
+                <h2>🔐 Nueva Solicitud de Acceso</h2>
+                <p>Alguien está intentando acceder a tu cuenta</p>
+            </div>
+            
+            <div class="device-details">
+                <h3>📱 Información del Dispositivo:</h3>
+                <div class="detail-grid">
+                    <div class="detail-item">
+                        <span class="detail-label">Tipo:</span>
+                        <span class="detail-value">${deviceInfo.deviceType}</span>
+                    </div>
+                    <div class="detail-item">
+                        <span class="detail-label">Ubicación:</span>
+                        <span class="detail-value">${deviceInfo.ipLocation}</span>
+                    </div>
+                    <div class="detail-item">
+                        <span class="detail-label">Plataforma:</span>
+                        <span class="detail-value">${deviceInfo.platform}</span>
+                    </div>
+                    <div class="detail-item">
+                        <span class="detail-label">Idioma:</span>
+                        <span class="detail-value">${deviceInfo.language}</span>
+                    </div>
+                    <div class="detail-item">
+                        <span class="detail-label">Zona horaria:</span>
+                        <span class="detail-value">${deviceInfo.timezone}</span>
+                    </div>
+                    <div class="detail-item">
+                        <span class="detail-label">Hora solicitud:</span>
+                        <span class="detail-value">${requestTime}</span>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="security-warning">
+                <i class="fas fa-exclamation-triangle"></i>
+                <p>Si no reconoces este dispositivo, deniega el acceso inmediatamente.</p>
+            </div>
+            
+            <div class="approval-countdown">
+                <p>Esta solicitud expirará en <span id="approval-countdown">60</span> segundos</p>
+                <div class="countdown-bar">
+                    <div class="countdown-progress" id="countdown-progress"></div>
+                </div>
+            </div>
+            
+            <div class="approval-actions">
+                <button class="deny-btn" onclick="denyDeviceAccess('${approvalId}', '${userId}')">
+                    <i class="fas fa-times"></i>
+                    Denegar Acceso
+                </button>
+                <button class="approve-btn" onclick="approveDeviceAccess('${approvalId}', '${userId}')">
+                    <i class="fas fa-check"></i>
+                    Aprobar Acceso
+                </button>
+            </div>
+        </div>
+    `;
+    
+    document.body.appendChild(deviceApprovalModal);
+    
+    // Iniciar countdown de 60 segundos
+    startApprovalCountdown(60, approvalId, userId);
+}
+
+// Función para iniciar countdown de aprobación
+function startApprovalCountdown(seconds, approvalId, userId) {
+    let timeLeft = seconds;
+    const countdownElement = document.getElementById('approval-countdown');
+    const progressElement = document.getElementById('countdown-progress');
+    
+    approvalTimeout = setInterval(() => {
+        timeLeft--;
+        
+        if (countdownElement) {
+            countdownElement.textContent = timeLeft;
+        }
+        
+        if (progressElement) {
+            const progress = ((seconds - timeLeft) / seconds) * 100;
+            progressElement.style.width = `${progress}%`;
+        }
+        
+        if (timeLeft <= 0) {
+            clearInterval(approvalTimeout);
+            denyDeviceAccess(approvalId, userId); // Auto-denegar cuando expire
+        }
+    }, 1000);
+}
+
+// Función para aprobar acceso de dispositivo
+function approveDeviceAccess(approvalId, userId) {
+    database.ref(`loginApprovals/${userId}/${approvalId}/status`).set('approved')
+        .then(() => {
+            console.log('Acceso aprobado');
+            closeDeviceApprovalModal();
+            showSuccessMessage('Acceso aprobado. El nuevo dispositivo puede acceder a tu cuenta.');
+        })
+        .catch(error => {
+            console.error('Error aprobando acceso:', error);
+            showErrorMessage('Error aprobando acceso.');
+        });
+}
+
+// Función para denegar acceso de dispositivo
+function denyDeviceAccess(approvalId, userId) {
+    database.ref(`loginApprovals/${userId}/${approvalId}/status`).set('denied')
+        .then(() => {
+            console.log('Acceso denegado');
+            closeDeviceApprovalModal();
+            showSuccessMessage('Acceso denegado. El dispositivo ha sido bloqueado por 10 minutos.');
+        })
+        .catch(error => {
+            console.error('Error denegando acceso:', error);
+            showErrorMessage('Error denegando acceso.');
+        });
+}
+
+// Función para cerrar modal de aprobación
+function closeDeviceApprovalModal() {
+    if (approvalTimeout) {
+        clearInterval(approvalTimeout);
+        approvalTimeout = null;
+    }
+    
+    if (deviceApprovalModal) {
+        document.body.removeChild(deviceApprovalModal);
+        deviceApprovalModal = null;
+    }
+}
+
 function logout() {
     if (currentUser) {
         updateUserStatus('offline');
+        
+        // Limpiar sesión activa
+        if (sessionManager.currentSessionId) {
+            database.ref(`activeSessions/${sessionManager.currentSessionId}`).remove();
+        }
+        
+        // Limpiar intervalos y listeners
+        if (sessionManager.activityInterval) {
+            clearInterval(sessionManager.activityInterval);
+        }
+        
+        if (sessionManager.loginAttemptListener) {
+            sessionManager.loginAttemptListener.off();
+            sessionManager.loginAttemptListener = null;
+        }
     }
     
     firebase.auth().signOut()
@@ -572,6 +978,15 @@ function logout() {
             currentUser = null;
             currentPhoneNumber = null;
             confirmationResult = null;
+            
+            // Resetear session manager
+            sessionManager = {
+                currentSessionId: null,
+                deviceInfo: null,
+                loginAttemptListener: null,
+                pendingApproval: null,
+                blockedUntil: null
+            };
             
             // Limpiar listeners
             cleanupChatListeners();
@@ -1215,6 +1630,12 @@ function checkAuthState() {
                         
                         // Actualizar estado a online
                         updateUserStatus('online');
+                        
+                        // Crear o restaurar sesión activa
+                        createActiveSession(user.uid, user.phoneNumber);
+                        
+                        // Configurar listener para solicitudes de aprobación
+                        setupLoginApprovalListener(user.uid);
                         
                         // Ir directamente a la lista de chats
                         loadUserContacts();
