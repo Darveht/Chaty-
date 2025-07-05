@@ -14,7 +14,7 @@ const firebaseConfig = {
 const CLOUDINARY_CONFIG = {
     cloudName: 'dqzkwfs7d',
     apiKey: '238548142884869',
-    uploadPreset: 'uberchat_uploads'
+    uploadPreset: 'ml_default'  // Usar preset por defecto
 };
 
 // Initialize Firebase
@@ -694,30 +694,45 @@ function loadUserContacts() {
     // Limpiar lista de contactos existente
     chatContacts = [];
     const chatList = document.querySelector('.chat-list');
+    
+    // Solo mostrar contactos añadidos, NO todos los usuarios registrados
     chatList.innerHTML = '<div class="loading-contacts"><i class="fas fa-spinner fa-spin"></i> Cargando contactos...</div>';
 
-    // Escuchar usuarios activos en Firebase
-    contactsListener = database.ref('users').on('value', (snapshot) => {
-        const users = snapshot.val() || {};
-        const usersList = Object.values(users).filter(user => user.uid !== currentUser.uid);
+    // Escuchar solo los contactos aprobados del usuario actual
+    if (currentUser && currentUser.uid) {
+        contactsListener = database.ref(`contacts/${currentUser.uid}`).on('value', (contactsSnapshot) => {
+            const contacts = contactsSnapshot.val() || {};
+            const contactIds = Object.keys(contacts);
 
-        chatList.innerHTML = '';
+            chatList.innerHTML = '';
 
-        if (usersList.length === 0) {
-            chatList.innerHTML = `
-                <div class="empty-state">
-                    <i class="fas fa-users"></i>
-                    <h3>No hay contactos aún</h3>
-                    <p>Agrega contactos para comenzar a chatear</p>
-                </div>
-            `;
-            return;
-        }
+            if (contactIds.length === 0) {
+                chatList.innerHTML = `
+                    <div class="empty-state">
+                        <i class="fas fa-user-plus"></i>
+                        <h3>No hay contactos aún</h3>
+                        <p>Busca usuarios por número de teléfono para agregar contactos</p>
+                        <button class="primary-btn" onclick="showAddContact()">
+                            <i class="fas fa-plus"></i>
+                            Buscar contacto
+                        </button>
+                    </div>
+                `;
+                return;
+            }
 
-        usersList.forEach(user => {
-            createContactItem(user);
+            // Cargar datos de cada contacto
+            contactIds.forEach(contactId => {
+                database.ref(`users/${contactId}`).once('value').then(userSnapshot => {
+                    if (userSnapshot.exists()) {
+                        const user = userSnapshot.val();
+                        user.uid = contactId;
+                        createContactItem(user);
+                    }
+                });
+            });
         });
-    });
+    }
 }
 
 function createContactItem(user) {
@@ -1142,16 +1157,16 @@ function handleAvatarChange(event) {
 
 // Función para subir archivos a Cloudinary
 async function uploadToCloudinary(file, resourceType = 'image') {
+    console.log('Iniciando subida a Cloudinary:', file.name, file.size);
+    
+    // Verificar tamaño del archivo (máximo 10MB)
+    if (file.size > 10 * 1024 * 1024) {
+        throw new Error('El archivo es demasiado grande. Máximo 10MB.');
+    }
+    
     const formData = new FormData();
     formData.append('file', file);
     formData.append('upload_preset', CLOUDINARY_CONFIG.uploadPreset);
-    formData.append('cloud_name', CLOUDINARY_CONFIG.cloudName);
-    
-    if (resourceType === 'image') {
-        formData.append('folder', 'uberchat/avatars');
-    } else {
-        formData.append('folder', 'uberchat/messages');
-    }
     
     try {
         const response = await fetch(`https://api.cloudinary.com/v1_1/${CLOUDINARY_CONFIG.cloudName}/${resourceType}/upload`, {
@@ -1159,15 +1174,20 @@ async function uploadToCloudinary(file, resourceType = 'image') {
             body: formData
         });
         
+        console.log('Respuesta de Cloudinary:', response.status);
+        
         if (!response.ok) {
-            throw new Error('Error en la subida');
+            const errorText = await response.text();
+            console.error('Error respuesta Cloudinary:', errorText);
+            throw new Error(`Error HTTP ${response.status}: ${errorText}`);
         }
         
         const data = await response.json();
+        console.log('Imagen subida exitosamente:', data.secure_url);
         return data.secure_url;
     } catch (error) {
-        console.error('Error subiendo a Cloudinary:', error);
-        throw error;
+        console.error('Error detallado subiendo a Cloudinary:', error);
+        throw new Error(`Error subiendo imagen: ${error.message}`);
     }
 }
 
@@ -2179,6 +2199,8 @@ function handleImageSelect(event) {
 function sendImageMessage(file) {
     if (!currentChatContact) return;
     
+    console.log('Enviando imagen:', file.name, 'Tamaño:', file.size);
+    
     const messagesContainer = document.getElementById('messages-container');
     const chatId = generateChatId(currentUser.uid, currentChatContact.uid);
 
@@ -2187,12 +2209,20 @@ function sendImageMessage(file) {
     messagesContainer.appendChild(messageElement);
     messagesContainer.scrollTop = messagesContainer.scrollHeight;
 
+    // Mostrar progreso de subida
+    const loadingElement = messageElement.querySelector('.image-loading');
+    loadingElement.innerHTML = `
+        <div class="image-loading-spinner"></div>
+        <div class="upload-progress">Subiendo imagen...</div>
+    `;
+
     // Subir imagen a Cloudinary
     uploadToCloudinary(file, 'image')
         .then(imageUrl => {
+            console.log('Imagen subida, URL:', imageUrl);
+            
             // Reemplazar elemento de carga con imagen real
-            const imageElement = messageElement.querySelector('.image-loading');
-            imageElement.outerHTML = `<img src="${imageUrl}" alt="Imagen enviada" onclick="expandImage(this)">`;
+            loadingElement.outerHTML = `<img src="${imageUrl}" alt="Imagen enviada" onclick="expandImage(this)" onload="console.log('Imagen cargada en chat')">`;
             
             // Crear mensaje en Firebase
             const messageData = {
@@ -2201,33 +2231,33 @@ function sendImageMessage(file) {
                 imageUrl: imageUrl,
                 senderId: currentUser.uid,
                 receiverId: currentChatContact.uid,
-                timestamp: firebase.database.ServerValue.TIMESTAMP,
+                timestamp: Date.now(), // Usar timestamp directo
                 status: 'sent'
             };
 
             // Enviar mensaje a Firebase
             database.ref(`chats/${chatId}/messages`).push(messageData)
                 .then(() => {
-                    console.log('Imagen enviada exitosamente');
+                    console.log('Mensaje de imagen guardado en Firebase');
                     playMessageSound();
 
                     // Actualizar último mensaje del chat
                     database.ref(`chats/${chatId}/lastMessage`).set({
                         text: '📷 Imagen',
-                        timestamp: firebase.database.ServerValue.TIMESTAMP,
+                        timestamp: Date.now(),
                         senderId: currentUser.uid
                     });
                 })
                 .catch(error => {
-                    console.error('Error enviando imagen:', error);
-                    showErrorMessage('Error enviando imagen.');
+                    console.error('Error guardando mensaje en Firebase:', error);
+                    showErrorMessage('Error guardando imagen en chat.');
                 });
         })
         .catch(error => {
-            console.error('Error subiendo imagen:', error);
+            console.error('Error completo subiendo imagen:', error);
             // Remover mensaje de carga si falla
             messageElement.remove();
-            showErrorMessage('Error subiendo imagen. Intenta de nuevo.');
+            showErrorMessage(`Error subiendo imagen: ${error.message}`);
         });
 }
 

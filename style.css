@@ -1,4 +1,3 @@
-
 * {
     margin: 0;
     padding: 0;
@@ -794,17 +793,17 @@ body {
         max-width: none;
         width: calc(100% - 2rem);
     }
-    
+
     .approval-actions {
         flex-direction: column;
     }
-    
+
     .detail-item {
         flex-direction: column;
         align-items: flex-start;
         gap: 0.25rem;
     }
-    
+
     .detail-value {
         max-width: 100%;
         text-align: left;
@@ -2560,10 +2559,18 @@ body {
 .image-loading-spinner {
     width: 30px;
     height: 30px;
-    border: 3px solid var(--border-color);
+    border: 3px solid #f3f3f3;
     border-top: 3px solid var(--primary-color);
     border-radius: 50%;
     animation: spin 1s linear infinite;
+    margin: 10px auto;
+}
+
+.upload-progress {
+    font-size: 0.8rem;
+    color: var(--text-secondary);
+    text-align: center;
+    margin-top: 5px;
 }
 
 @keyframes spin {
@@ -3241,6 +3248,8 @@ body {
 .security-icon {
     width: 80px;
     height: 80px;
+This CSS snippet adds styles for image upload progress indication.
+```css
     background: var(--primary-color);
     border-radius: 50%;
     display: flex;
@@ -3821,20 +3830,20 @@ body {
         min-width: auto;
         animation: slideInDown 0.3s ease-out;
     }
-    
+
     .code-actions {
         flex-direction: column;
     }
-    
+
     .code-number {
         font-size: 2.5rem;
         letter-spacing: 0.3rem;
     }
-    
+
     .verification-code-container {
         padding: 1.5rem;
     }
-    
+
     @keyframes slideInDown {
         from {
             transform: translateY(-100%);
@@ -3854,36 +3863,36 @@ body {
         padding: 1.5rem;
         margin: 1rem;
     }
-    
+
     .warning-actions {
         flex-direction: column;
     }
-    
+
     .result-content {
         padding: 1.5rem 1rem;
     }
-    
+
     .analysis-details, .action-taken, .next-steps {
         padding: 1rem;
     }
-    
+
     .detail-grid-fullscreen {
         grid-template-columns: 1fr;
     }
-    
+
     .approval-actions-fullscreen {
         flex-direction: column;
     }
-    
+
     .security-warning-fullscreen {
         flex-direction: column;
         text-align: center;
     }
-    
+
     .approval-header-fullscreen h1 {
         font-size: 2rem;
     }
-    
+
     .message-title {
         font-size: 2rem;
     }
@@ -3894,25 +3903,25 @@ body {
     .intro-container, .register-container, .verification-container {
         padding: 1.5rem;
     }
-    
+
     .logo h1 {
         font-size: 2rem;
     }
-    
+
     .intro-text {
         font-size: 1rem;
     }
-    
+
     .code-digit {
         width: 45px;
         height: 55px;
         font-size: 1.3rem;
     }
-    
+
     .message {
         max-width: 85%;
     }
-    
+
     .modal-content {
         width: 95%;
         margin: 1rem;
@@ -3923,28 +3932,28 @@ body {
     .chat-header {
         padding: 0.75rem 1rem;
     }
-    
+
     .chat-header h2 {
         font-size: 1.5rem;
     }
-    
+
     .search-container {
         padding: 0.75rem 1rem;
     }
-    
+
     .chat-item {
         padding: 0.75rem 1rem;
     }
-    
+
     .avatar img {
         width: 45px;
         height: 45px;
     }
-    
+
     .message-input-container {
         padding: 0.75rem;
     }
-    
+
     .code-digit {
         width: 40px;
         height: 50px;
