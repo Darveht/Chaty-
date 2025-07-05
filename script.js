@@ -1,13 +1,34 @@
+// Firebase Configuration
+const firebaseConfig = {
+    apiKey: "AIzaSyCFQ_geG0HIv2EZ-bfKc97TJNtf2sdqPzc",
+    authDomain: "clack-koder.firebaseapp.com",
+    databaseURL: "https://clack-koder-default-rtdb.firebaseio.com",
+    projectId: "clack-koder",
+    storageBucket: "clack-koder.firebasestorage.app",
+    messagingSenderId: "478151254938",
+    appId: "1:478151254938:web:e2c00e3a5426bd192b9023",
+    measurementId: "G-P29ME5Z3S1"
+};
+
+// Initialize Firebase
+firebase.initializeApp(firebaseConfig);
+const auth = firebase.auth();
+
 // Estado global de la aplicación
 let currentScreen = 'intro';
 let userLanguage = 'es';
 let currentChatContact = null;
-let verificationCode = '123456'; // Código simulado para desarrollo
+let verificationCode = '123456'; // Código simulado para desarrollo - será reemplazado por Firebase
 let typingTimer = null;
 let isTyping = false;
 let chatContacts = [];
 let selectedReportType = null;
 let evidenceImages = [];
+
+// Firebase Authentication variables
+let recaptchaVerifier = null;
+let confirmationResult = null;
+let currentPhoneNumber = null;
 let moderationSystem = {
     offensiveWords: ['puta', 'perra', 'zorra', 'cabrón', 'pendejo', 'idiota', 'estúpido', 'mierda', 'joder', 'coño'],
     userViolations: {},
@@ -143,15 +164,56 @@ phoneInput.addEventListener('input', function() {
 function sendVerificationCode() {
     const countryCode = document.getElementById('country-select').value;
     const phoneNumber = document.getElementById('phone-input').value;
-    const fullNumber = `${countryCode} ${phoneNumber}`;
-
+    const fullNumber = `${countryCode}${phoneNumber}`;
+    
+    currentPhoneNumber = fullNumber;
     document.getElementById('phone-display').textContent = fullNumber;
 
-    // Simular envío de código
-    setTimeout(() => {
-        switchScreen('verification');
-        document.querySelector('.code-digit').focus();
-    }, 500);
+    // Mostrar loading en el botón
+    const sendBtn = document.getElementById('send-code-btn');
+    const originalText = sendBtn.innerHTML;
+    sendBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Enviando...';
+    sendBtn.disabled = true;
+
+    // Inicializar reCAPTCHA verifier si no existe
+    if (!recaptchaVerifier) {
+        recaptchaVerifier = new firebase.auth.RecaptchaVerifier('recaptcha-container', {
+            'size': 'invisible',
+            'callback': function(response) {
+                console.log('reCAPTCHA solved');
+            }
+        });
+    }
+
+    // Enviar código SMS usando Firebase
+    auth.signInWithPhoneNumber(fullNumber, recaptchaVerifier)
+        .then(function(result) {
+            confirmationResult = result;
+            console.log('Código SMS enviado exitosamente');
+            
+            // Restaurar botón y cambiar a pantalla de verificación
+            sendBtn.innerHTML = originalText;
+            sendBtn.disabled = false;
+            
+            switchScreen('verification');
+            document.querySelector('.code-digit').focus();
+        })
+        .catch(function(error) {
+            console.error('Error enviando SMS:', error);
+            
+            // Restaurar botón y mostrar error
+            sendBtn.innerHTML = originalText;
+            sendBtn.disabled = false;
+            
+            // Mostrar mensaje de error al usuario
+            showErrorMessage('Error enviando código: ' + error.message);
+            
+            // Resetear reCAPTCHA
+            if (recaptchaVerifier) {
+                recaptchaVerifier.clear();
+                recaptchaVerifier = null;
+            }
+        });
 }
 
 function goToRegister() {
@@ -196,15 +258,32 @@ function verifyCode() {
     statusElement.className = 'verification-status verifying';
     statusElement.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Verificando<span class="loading-dots"></span>';
 
-    setTimeout(() => {
-        if (enteredCode === verificationCode) {
+    if (!confirmationResult) {
+        statusElement.className = 'verification-status error';
+        statusElement.innerHTML = '<i class="fas fa-times-circle"></i> Error: No se ha enviado código';
+        return;
+    }
+
+    // Verificar código con Firebase
+    confirmationResult.confirm(enteredCode)
+        .then(function(result) {
+            // Usuario autenticado exitosamente
+            const user = result.user;
+            console.log('Usuario autenticado:', user);
+            
             statusElement.className = 'verification-status success';
             statusElement.innerHTML = '<i class="fas fa-check-circle"></i> ¡Código verificado!';
+
+            // Guardar información del usuario
+            saveUserData(user);
 
             setTimeout(() => {
                 switchScreen('chat-list');
             }, 1500);
-        } else {
+        })
+        .catch(function(error) {
+            console.error('Error verificando código:', error);
+            
             statusElement.className = 'verification-status error';
             statusElement.innerHTML = '<i class="fas fa-times-circle"></i> Código inválido';
 
@@ -214,19 +293,113 @@ function verifyCode() {
             });
             enteredCode = '';
             document.querySelector('.code-digit').focus();
-        }
-    }, 2000);
+        });
 }
 
 function resendCode() {
-    // Simular reenvío
+    if (!currentPhoneNumber) {
+        console.error('No hay número de teléfono para reenviar');
+        return;
+    }
+
     const statusElement = document.getElementById('verification-status');
     statusElement.className = 'verification-status';
-    statusElement.innerHTML = '<i class="fas fa-paper-plane"></i> Código reenviado';
+    statusElement.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Reenviando código...';
 
+    // Resetear reCAPTCHA
+    if (recaptchaVerifier) {
+        recaptchaVerifier.clear();
+        recaptchaVerifier = null;
+    }
+
+    // Crear nuevo reCAPTCHA verifier
+    recaptchaVerifier = new firebase.auth.RecaptchaVerifier('recaptcha-container', {
+        'size': 'invisible',
+        'callback': function(response) {
+            console.log('reCAPTCHA solved for resend');
+        }
+    });
+
+    // Reenviar código
+    auth.signInWithPhoneNumber(currentPhoneNumber, recaptchaVerifier)
+        .then(function(result) {
+            confirmationResult = result;
+            statusElement.innerHTML = '<i class="fas fa-paper-plane"></i> Código reenviado';
+            
+            setTimeout(() => {
+                statusElement.innerHTML = '';
+            }, 3000);
+        })
+        .catch(function(error) {
+            console.error('Error reenviando código:', error);
+            statusElement.className = 'verification-status error';
+            statusElement.innerHTML = '<i class="fas fa-times-circle"></i> Error reenviando código';
+            
+            setTimeout(() => {
+                statusElement.innerHTML = '';
+            }, 3000);
+        });
+}
+
+function saveUserData(user) {
+    // Guardar datos del usuario en localStorage y variables globales
+    const userData = {
+        uid: user.uid,
+        phoneNumber: user.phoneNumber,
+        lastSignIn: new Date().toISOString()
+    };
+    
+    localStorage.setItem('uberChatUser', JSON.stringify(userData));
+    console.log('Datos de usuario guardados:', userData);
+}
+
+function showErrorMessage(message) {
+    // Crear y mostrar modal de error
+    const errorModal = document.createElement('div');
+    errorModal.className = 'error-modal';
+    errorModal.innerHTML = `
+        <div class="error-content">
+            <div class="error-icon">
+                <i class="fas fa-exclamation-circle"></i>
+            </div>
+            <h3>Error</h3>
+            <p>${message}</p>
+            <button class="primary-btn" onclick="closeErrorModal()">Entendido</button>
+        </div>
+    `;
+    
+    document.body.appendChild(errorModal);
+    
+    // Auto-cerrar después de 5 segundos
     setTimeout(() => {
-        statusElement.innerHTML = '';
-    }, 3000);
+        closeErrorModal();
+    }, 5000);
+}
+
+function closeErrorModal() {
+    const errorModal = document.querySelector('.error-modal');
+    if (errorModal) {
+        document.body.removeChild(errorModal);
+    }
+}
+
+// Verificar si el usuario ya está autenticado al cargar la página
+function checkAuthState() {
+    auth.onAuthStateChanged(function(user) {
+        if (user) {
+            console.log('Usuario ya autenticado:', user);
+            // Si el usuario está autenticado, ir directamente a la lista de chats
+            if (currentScreen === 'intro' || currentScreen === 'register' || currentScreen === 'verification') {
+                switchScreen('chat-list');
+            }
+        } else {
+            console.log('Usuario no autenticado');
+            // Si no está autenticado y está en pantallas protegidas, volver al inicio
+            if (currentScreen === 'chat-list' || currentScreen === 'chat') {
+                switchScreen('intro');
+            }
+        }
+    });
 }
 
 // Pantalla de Chat
@@ -754,6 +927,9 @@ document.addEventListener('DOMContentLoaded', function() {
     // Configurar pantalla inicial
     switchScreen('intro');
     updateLanguage();
+    
+    // Verificar estado de autenticación
+    checkAuthState();
 
     // Configurar eventos
     const phoneInput = document.getElementById('phone-input');
