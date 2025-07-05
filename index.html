@@ -487,12 +487,169 @@
                 <h2>Ajustes</h2>
             </div>
             <div class="settings-content">
-                <button class="setting-item" onclick="logout()">
-                    <i class="fas fa-sign-out-alt"></i>
-                    <span>Cerrar sesión</span>
-                </button>
+                <!-- Sección de perfil -->
+                <div class="profile-section">
+                    <div class="profile-avatar-container">
+                        <img class="profile-avatar" id="profile-avatar" src="" alt="Avatar">
+                        <button class="change-avatar-btn" onclick="changeProfileAvatar()">
+                            <i class="fas fa-camera"></i>
+                        </button>
+                    </div>
+                    <div class="profile-info">
+                        <h3 id="profile-username">Usuario</h3>
+                        <div class="profile-phone" id="profile-phone-display">+34 123 456 789</div>
+                        <div class="profile-status">🟢 En línea</div>
+                        <button class="edit-profile-btn" onclick="showEditProfile()">
+                            <i class="fas fa-edit"></i>
+                            Editar Perfil
+                        </button>
+                    </div>
                 </div>
+
+                <!-- Lista de configuraciones -->
+                <div class="settings-list">
+                    <div class="settings-group">
+                        <div class="settings-group-title">Cuenta</div>
+                        
+                        <div class="setting-item" onclick="showEditProfile()">
+                            <div class="setting-icon">
+                                <i class="fas fa-user-edit"></i>
+                            </div>
+                            <div class="setting-info">
+                                <div class="setting-title">Editar Perfil</div>
+                                <div class="setting-description">Cambiar nombre, avatar y información personal</div>
+                            </div>
+                            <div class="setting-arrow">
+                                <i class="fas fa-chevron-right"></i>
+                            </div>
+                        </div>
+
+                        <div class="setting-item" onclick="showPrivacySettings()">
+                            <div class="setting-icon">
+                                <i class="fas fa-shield-alt"></i>
+                            </div>
+                            <div class="setting-info">
+                                <div class="setting-title">Privacidad y Seguridad</div>
+                                <div class="setting-description">Control de quién puede contactarte</div>
+                            </div>
+                            <div class="setting-arrow">
+                                <i class="fas fa-chevron-right"></i>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="settings-group">
+                        <div class="settings-group-title">Notificaciones</div>
+                        
+                        <div class="setting-item">
+                            <div class="setting-icon">
+                                <i class="fas fa-bell"></i>
+                            </div>
+                            <div class="setting-info">
+                                <div class="setting-title">Notificaciones de Mensajes</div>
+                                <div class="setting-description">Recibir alertas de mensajes nuevos</div>
+                            </div>
+                            <div class="setting-toggle">
+                                <div class="toggle-switch active" onclick="toggleNotifications(this)">
+                                    <div class="toggle-slider"></div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="setting-item">
+                            <div class="setting-icon">
+                                <i class="fas fa-phone"></i>
+                            </div>
+                            <div class="setting-info">
+                                <div class="setting-title">Notificaciones de Llamadas</div>
+                                <div class="setting-description">Recibir alertas de llamadas entrantes</div>
+                            </div>
+                            <div class="setting-toggle">
+                                <div class="toggle-switch active" onclick="toggleCallNotifications(this)">
+                                    <div class="toggle-slider"></div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="settings-group">
+                        <div class="settings-group-title">Chat</div>
+                        
+                        <div class="setting-item">
+                            <div class="setting-icon">
+                                <i class="fas fa-language"></i>
+                            </div>
+                            <div class="setting-info">
+                                <div class="setting-title">Traducción Automática</div>
+                                <div class="setting-description">Traducir mensajes automáticamente</div>
+                            </div>
+                            <div class="setting-toggle">
+                                <div class="toggle-switch active" onclick="toggleAutoTranslate(this)">
+                                    <div class="toggle-slider"></div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="setting-item" onclick="showStorageSettings()">
+                            <div class="setting-icon">
+                                <i class="fas fa-hdd"></i>
+                            </div>
+                            <div class="setting-info">
+                                <div class="setting-title">Almacenamiento</div>
+                                <div class="setting-description">Gestionar espacio y archivos</div>
+                            </div>
+                            <div class="setting-arrow">
+                                <i class="fas fa-chevron-right"></i>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="settings-group">
+                        <div class="settings-group-title">Información</div>
+                        
+                        <div class="setting-item" onclick="showAbout()">
+                            <div class="setting-icon">
+                                <i class="fas fa-info-circle"></i>
+                            </div>
+                            <div class="setting-info">
+                                <div class="setting-title">Acerca de UberChat</div>
+                                <div class="setting-description">Versión 1.0.0</div>
+                            </div>
+                            <div class="setting-arrow">
+                                <i class="fas fa-chevron-right"></i>
+                            </div>
+                        </div>
+
+                        <div class="setting-item" onclick="showHelp()">
+                            <div class="setting-icon">
+                                <i class="fas fa-question-circle"></i>
+                            </div>
+                            <div class="setting-info">
+                                <div class="setting-title">Ayuda y Soporte</div>
+                                <div class="setting-description">FAQ y contacto</div>
+                            </div>
+                            <div class="setting-arrow">
+                                <i class="fas fa-chevron-right"></i>
+                            </div>
+                        </div>
+
+                        <div class="setting-item" onclick="logout()">
+                            <div class="setting-icon" style="background: linear-gradient(135deg, #e74c3c, #c0392b);">
+                                <i class="fas fa-sign-out-alt"></i>
+                            </div>
+                            <div class="setting-info">
+                                <div class="setting-title">Cerrar Sesión</div>
+                                <div class="setting-description">Salir de tu cuenta</div>
+                            </div>
+                            <div class="setting-arrow">
+                                <i class="fas fa-chevron-right"></i>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
         </div>
+
         <!-- Bottom navigation bar -->
         <div class="bottom-nav">
             <div class="nav-item" onclick="showSection('chats')">
@@ -510,6 +667,47 @@
             <div class="nav-item active" onclick="showSection('settings')">
                 <i class="fas fa-cog"></i>
                 <span>Ajustes</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal de edición de perfil -->
+    <div id="edit-profile-modal" class="edit-profile-modal">
+        <div class="edit-profile-container">
+            <div class="edit-profile-header">
+                <button class="close-btn" onclick="hideEditProfile()">
+                    <i class="fas fa-arrow-left"></i>
+                </button>
+                <h3>Editar Perfil</h3>
+                <button class="save-profile-btn" onclick="saveProfile()">
+                    <i class="fas fa-save"></i>
+                    Guardar
+                </button>
+            </div>
+            <div class="edit-profile-content">
+                <div class="avatar-upload">
+                    <img class="avatar-preview" id="avatar-preview" src="" alt="Preview">
+                    <button class="upload-avatar-btn" onclick="selectNewAvatar()">
+                        <i class="fas fa-camera"></i>
+                        Cambiar Foto
+                    </button>
+                    <input type="file" id="avatar-input" accept="image/*" style="display: none;" onchange="handleAvatarChange(event)">
+                </div>
+                
+                <div class="edit-field">
+                    <label for="username-input">Nombre de Usuario</label>
+                    <input type="text" id="username-input" placeholder="Ingresa tu nombre de usuario">
+                </div>
+
+                <div class="edit-field">
+                    <label for="status-input">Estado Personal</label>
+                    <input type="text" id="status-input" placeholder="¿Cómo te sientes hoy?">
+                </div>
+
+                <div class="edit-field">
+                    <label>Número de Teléfono</label>
+                    <input type="text" id="phone-readonly" readonly style="background: var(--surface); color: var(--text-secondary);">
+                </div>
             </div>
         </div>
     </div>
