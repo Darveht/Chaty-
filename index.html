@@ -1,0 +1,211 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>EzTranslate - Traductor Inteligente</title>
+    <link href="style.css" rel="stylesheet" type="text/css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+</head>
+<body>
+    <div class="app-container">
+        <!-- Header -->
+        <header class="app-header">
+            <div class="header-content">
+                <div class="logo">
+                    <i class="fas fa-language"></i>
+                    <span>EzTranslate</span>
+                </div>
+                <div class="header-actions">
+                    <button class="btn-secondary" id="fullscreenBtn">
+                        <i class="fas fa-expand"></i>
+                        Pantalla Completa
+                    </button>
+                    <button class="btn-secondary" id="historyBtn">
+                        <i class="fas fa-history"></i>
+                        Historial
+                    </button>
+                    <button class="btn-primary" id="voiceBtn">
+                        <i class="fas fa-microphone"></i>
+                        Voz en Tiempo Real
+                    </button>
+                </div>
+            </div>
+        </header>
+
+        <!-- Main Content -->
+        <main class="main-content">
+            <div class="translation-container">
+                <!-- Language Selector -->
+                <div class="language-selector">
+                    <div class="language-box">
+                        <select id="sourceLanguage" class="language-select">
+                            <option value="auto">Detectar idioma</option>
+                            <option value="es">Español</option>
+                            <option value="en">Inglés</option>
+                            <option value="fr">Francés</option>
+                            <option value="de">Alemán</option>
+                            <option value="it">Italiano</option>
+                            <option value="pt">Portugués</option>
+                            <option value="ru">Ruso</option>
+                            <option value="ja">Japonés</option>
+                            <option value="ko">Coreano</option>
+                            <option value="zh">Chino</option>
+                        </select>
+                    </div>
+                    
+                    <button class="swap-btn" id="swapLanguages">
+                        <i class="fas fa-exchange-alt"></i>
+                    </button>
+                    
+                    <div class="language-box">
+                        <select id="targetLanguage" class="language-select">
+                            <option value="en">Inglés</option>
+                            <option value="es">Español</option>
+                            <option value="fr">Francés</option>
+                            <option value="de">Alemán</option>
+                            <option value="it">Italiano</option>
+                            <option value="pt">Portugués</option>
+                            <option value="ru">Ruso</option>
+                            <option value="ja">Japonés</option>
+                            <option value="ko">Coreano</option>
+                            <option value="zh">Chino</option>
+                        </select>
+                    </div>
+                </div>
+
+                <!-- Translation Interface -->
+                <div class="translation-interface">
+                    <div class="input-section">
+                        <div class="input-header">
+                            <span class="section-title">Texto original</span>
+                            <div class="input-actions">
+                                <button class="action-btn" id="clearBtn">
+                                    <i class="fas fa-times"></i>
+                                </button>
+                                <button class="action-btn" id="speakInputBtn">
+                                    <i class="fas fa-volume-up"></i>
+                                </button>
+                            </div>
+                        </div>
+                        <textarea 
+                            id="inputText" 
+                            placeholder="Escribe o pega el texto que deseas traducir..."
+                            maxlength="5000"
+                        ></textarea>
+                        <div class="input-footer">
+                            <span class="char-count">0/5000</span>
+                            <button class="btn-primary translate-btn" id="translateBtn">
+                                <i class="fas fa-arrow-right"></i>
+                                Traducir
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="output-section">
+                        <div class="output-header">
+                            <span class="section-title">Traducción</span>
+                            <div class="output-actions">
+                                <button class="action-btn" id="copyBtn">
+                                    <i class="fas fa-copy"></i>
+                                </button>
+                                <button class="action-btn" id="speakOutputBtn">
+                                    <i class="fas fa-volume-up"></i>
+                                </button>
+                            </div>
+                        </div>
+                        <div id="outputText" class="output-text">
+                            <div class="placeholder">
+                                <i class="fas fa-language"></i>
+                                <p>La traducción aparecerá aquí</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Quick Actions -->
+                <div class="quick-actions">
+                    <button class="quick-btn" id="cameraBtn">
+                        <i class="fas fa-camera"></i>
+                        <span>Cámara</span>
+                    </button>
+                    <button class="quick-btn" id="imageBtn">
+                        <i class="fas fa-image"></i>
+                        <span>Imagen</span>
+                    </button>
+                    <button class="quick-btn" id="conversationBtn">
+                        <i class="fas fa-comments"></i>
+                        <span>Conversación</span>
+                    </button>
+                </div>
+            </div>
+        </main>
+
+        <!-- Loading Overlay -->
+        <div class="loading-overlay" id="loadingOverlay">
+            <div class="loading-spinner">
+                <div class="spinner"></div>
+                <p>Traduciendo...</p>
+            </div>
+        </div>
+
+        <!-- Toast Notifications -->
+        <div class="toast-container" id="toastContainer"></div>
+    </div>
+
+    <!-- Voice Modal -->
+    <div class="modal" id="voiceModal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>Grabación de Voz</h3>
+                <button class="close-btn" id="closeVoiceModal">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <div class="modal-body">
+                <div class="voice-interface">
+                    <div class="voice-visualizer">
+                        <div class="voice-circle" id="voiceCircle">
+                            <i class="fas fa-microphone"></i>
+                        </div>
+                    </div>
+                    <p class="voice-status" id="voiceStatus">Presiona para hablar</p>
+                    <div class="voice-features">
+                        <div class="feature-item">
+                            <i class="fas fa-dna"></i>
+                            <span>Análisis de ADN vocal único</span>
+                        </div>
+                        <div class="feature-item">
+                            <i class="fas fa-brain"></i>
+                            <span>IA neuronal para clonación perfecta</span>
+                        </div>
+                        <div class="feature-item">
+                            <i class="fas fa-wave-square"></i>
+                            <span>Captura de patrones de frecuencia</span>
+                        </div>
+                        <div class="feature-item">
+                            <i class="fas fa-heartbeat"></i>
+                            <span>Detección de ritmo y respiración</span>
+                        </div>
+                        <div class="feature-item">
+                            <i class="fas fa-magic"></i>
+                            <span>Síntesis con TU voz exacta</span>
+                        </div>
+                        <div class="feature-item">
+                            <i class="fas fa-globe"></i>
+                            <span>Traducción en cualquier idioma</span>
+                        </div>
+                    </div>
+                    <button class="voice-record-btn" id="recordBtn">
+                        <i class="fas fa-microphone"></i>
+                        Iniciar Clonación de Voz
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+</html>
