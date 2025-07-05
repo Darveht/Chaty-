@@ -511,6 +511,82 @@ body {
     visibility: hidden !important;
 }
 
+/* Estados de carga */
+.loading-contacts, .loading-messages {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 3rem 2rem;
+    text-align: center;
+    color: var(--text-secondary);
+}
+
+.loading-contacts i, .loading-messages i {
+    font-size: 2rem;
+    margin-bottom: 1rem;
+    color: var(--primary-color);
+}
+
+.empty-state {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 3rem 2rem;
+    text-align: center;
+    color: var(--text-secondary);
+}
+
+.empty-state i {
+    font-size: 3rem;
+    margin-bottom: 1rem;
+    opacity: 0.5;
+}
+
+.empty-state h3 {
+    margin-bottom: 0.5rem;
+    color: var(--text-primary);
+}
+
+/* Modal de errores y éxito */
+.error-modal, .success-modal {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100vh;
+    background: rgba(0, 0, 0, 0.5);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 10000;
+    animation: fadeIn 0.3s ease-out;
+}
+
+.error-content, .success-content {
+    background: var(--background);
+    padding: 2rem;
+    border-radius: var(--border-radius);
+    max-width: 400px;
+    width: 90%;
+    text-align: center;
+    box-shadow: var(--shadow-hover);
+}
+
+.error-icon, .success-icon {
+    font-size: 3rem;
+    margin-bottom: 1rem;
+}
+
+.error-icon {
+    color: #e74c3c;
+}
+
+.success-icon {
+    color: #00a854;
+}
+
 /* Error and Success Modals */
 .error-modal, .success-modal {
     position: fixed;

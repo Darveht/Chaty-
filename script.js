@@ -13,17 +13,21 @@ const firebaseConfig = {
 // Initialize Firebase
 firebase.initializeApp(firebaseConfig);
 const auth = firebase.auth();
+const database = firebase.database();
 
 // Estado global de la aplicación
 let currentScreen = 'intro';
 let userLanguage = 'es';
 let currentChatContact = null;
-let verificationCode = '123456'; // Código simulado para desarrollo - será reemplazado por Firebase
+let currentUser = null;
+let verificationCode = '';
 let typingTimer = null;
 let isTyping = false;
 let chatContacts = [];
 let selectedReportType = null;
 let evidenceImages = [];
+let messagesListener = null;
+let contactsListener = null;
 
 // Firebase Authentication variables
 let recaptchaVerifier = null;
@@ -169,7 +173,7 @@ function sendVerificationCode() {
     const cleanPhoneNumber = phoneNumber.replace(/\D/g, '');
     const fullNumber = `${countryCode}${cleanPhoneNumber}`;
     
-    console.log('Enviando código a:', fullNumber);
+    console.log('Procesando número:', fullNumber);
     
     currentPhoneNumber = fullNumber;
     document.getElementById('phone-display').textContent = fullNumber;
@@ -180,82 +184,24 @@ function sendVerificationCode() {
     sendBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Enviando...';
     sendBtn.disabled = true;
 
-    // Limpiar reCAPTCHA anterior si existe
-    if (recaptchaVerifier) {
-        recaptchaVerifier.clear();
-    }
-
-    // Crear nuevo reCAPTCHA verifier
-    recaptchaVerifier = new firebase.auth.RecaptchaVerifier('recaptcha-container', {
-        'size': 'invisible',
-        'callback': function(response) {
-            console.log('reCAPTCHA resuelto:', response);
-        },
-        'expired-callback': function() {
-            console.log('reCAPTCHA expirado');
-        },
-        'error-callback': function(error) {
-            console.log('Error en reCAPTCHA:', error);
-        }
-    });
-
-    // Render del reCAPTCHA
-    recaptchaVerifier.render().then(function(widgetId) {
-        console.log('reCAPTCHA renderizado con ID:', widgetId);
-        
-        // Enviar código SMS usando Firebase
-        return auth.signInWithPhoneNumber(fullNumber, recaptchaVerifier);
-    }).then(function(result) {
-        confirmationResult = result;
-        console.log('Código SMS enviado exitosamente a:', fullNumber);
-        
-        // Restaurar botón y cambiar a pantalla de verificación
+    // Generar código aleatorio de 6 dígitos
+    verificationCode = Math.floor(100000 + Math.random() * 900000).toString();
+    console.log('Código generado:', verificationCode);
+    
+    // Simular envío de SMS
+    setTimeout(() => {
         sendBtn.innerHTML = originalText;
         sendBtn.disabled = false;
         
-        // Mostrar mensaje de éxito temporal
-        showSuccessMessage('Código enviado a ' + fullNumber);
+        // Mostrar el código generado en la consola y en una alerta temporal
+        showSuccessMessage(`Código enviado a ${fullNumber}. Código: ${verificationCode}`);
         
         setTimeout(() => {
             switchScreen('verification');
             document.querySelector('.code-digit').focus();
-        }, 1500);
+        }, 2000);
         
-    }).catch(function(error) {
-        console.error('Error detallado:', error);
-        
-        // Restaurar botón
-        sendBtn.innerHTML = originalText;
-        sendBtn.disabled = false;
-        
-        let errorMessage = 'Error enviando código: ';
-        
-        // Manejar errores específicos
-        switch(error.code) {
-            case 'auth/invalid-phone-number':
-                errorMessage += 'Número de teléfono inválido. Verifica el formato.';
-                break;
-            case 'auth/too-many-requests':
-                errorMessage += 'Demasiados intentos. Intenta más tarde.';
-                break;
-            case 'auth/quota-exceeded':
-                errorMessage += 'Se ha superado la cuota diaria de SMS.';
-                break;
-            case 'auth/captcha-check-failed':
-                errorMessage += 'Verificación de seguridad fallida. Intenta de nuevo.';
-                break;
-            default:
-                errorMessage += error.message || 'Error desconocido';
-        }
-        
-        showErrorMessage(errorMessage);
-        
-        // Resetear reCAPTCHA
-        if (recaptchaVerifier) {
-            recaptchaVerifier.clear();
-            recaptchaVerifier = null;
-        }
-    });
+    }, 2000);
 }
 
 function goToRegister() {
@@ -300,42 +246,45 @@ function verifyCode() {
     statusElement.className = 'verification-status verifying';
     statusElement.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Verificando<span class="loading-dots"></span>';
 
-    if (!confirmationResult) {
-        statusElement.className = 'verification-status error';
-        statusElement.innerHTML = '<i class="fas fa-times-circle"></i> Error: No se ha enviado código';
-        return;
-    }
+    // Verificar el código ingresado con el código generado
+    if (enteredCode === verificationCode) {
+        statusElement.className = 'verification-status success';
+        statusElement.innerHTML = '<i class="fas fa-check-circle"></i> ¡Código verificado!';
 
-    // Verificar código con Firebase
-    confirmationResult.confirm(enteredCode)
-        .then(function(result) {
-            // Usuario autenticado exitosamente
-            const user = result.user;
-            console.log('Usuario autenticado:', user);
-            
-            statusElement.className = 'verification-status success';
-            statusElement.innerHTML = '<i class="fas fa-check-circle"></i> ¡Código verificado!';
+        // Crear usuario en Firebase Database
+        const userId = generateUserId(currentPhoneNumber);
+        currentUser = {
+            uid: userId,
+            phoneNumber: currentPhoneNumber,
+            lastSeen: firebase.database.ServerValue.TIMESTAMP,
+            status: 'online'
+        };
 
-            // Guardar información del usuario
-            saveUserData(user);
-
-            setTimeout(() => {
-                switchScreen('chat-list');
-            }, 1500);
-        })
-        .catch(function(error) {
-            console.error('Error verificando código:', error);
-            
-            statusElement.className = 'verification-status error';
-            statusElement.innerHTML = '<i class="fas fa-times-circle"></i> Código inválido';
-
-            // Limpiar campos
-            document.querySelectorAll('.code-digit').forEach(input => {
-                input.value = '';
+        // Guardar usuario en Firebase Database
+        database.ref('users/' + userId).set(currentUser)
+            .then(() => {
+                console.log('Usuario guardado en Firebase:', currentUser);
+                setTimeout(() => {
+                    loadUserContacts();
+                    switchScreen('chat-list');
+                }, 1500);
+            })
+            .catch(error => {
+                console.error('Error guardando usuario:', error);
+                statusElement.className = 'verification-status error';
+                statusElement.innerHTML = '<i class="fas fa-times-circle"></i> Error guardando usuario';
             });
-            enteredCode = '';
-            document.querySelector('.code-digit').focus();
+    } else {
+        statusElement.className = 'verification-status error';
+        statusElement.innerHTML = '<i class="fas fa-times-circle"></i> Código inválido';
+
+        // Limpiar campos
+        document.querySelectorAll('.code-digit').forEach(input => {
+            input.value = '';
         });
+        enteredCode = '';
+        document.querySelector('.code-digit').focus();
+    }
 }
 
 function resendCode() {
@@ -383,16 +332,70 @@ function resendCode() {
         });
 }
 
-function saveUserData(user) {
-    // Guardar datos del usuario en localStorage y variables globales
-    const userData = {
-        uid: user.uid,
-        phoneNumber: user.phoneNumber,
-        lastSignIn: new Date().toISOString()
-    };
+function generateUserId(phoneNumber) {
+    // Generar ID único basado en el número de teléfono
+    return 'user_' + phoneNumber.replace(/\D/g, '');
+}
+
+function loadUserContacts() {
+    // Limpiar lista de contactos existente
+    chatContacts = [];
+    const chatList = document.querySelector('.chat-list');
+    chatList.innerHTML = '<div class="loading-contacts"><i class="fas fa-spinner fa-spin"></i> Cargando contactos...</div>';
+
+    // Escuchar usuarios activos en Firebase
+    contactsListener = database.ref('users').on('value', (snapshot) => {
+        const users = snapshot.val() || {};
+        const usersList = Object.values(users).filter(user => user.uid !== currentUser.uid);
+        
+        chatList.innerHTML = '';
+        
+        if (usersList.length === 0) {
+            chatList.innerHTML = `
+                <div class="empty-state">
+                    <i class="fas fa-users"></i>
+                    <h3>No hay contactos aún</h3>
+                    <p>Agrega contactos para comenzar a chatear</p>
+                </div>
+            `;
+            return;
+        }
+
+        usersList.forEach(user => {
+            createContactItem(user);
+        });
+    });
+}
+
+function createContactItem(user) {
+    const chatList = document.querySelector('.chat-list');
+    const chatItem = document.createElement('div');
+    chatItem.className = 'chat-item';
+    chatItem.onclick = () => openChatWithUser(user);
     
-    localStorage.setItem('uberChatUser', JSON.stringify(userData));
-    console.log('Datos de usuario guardados:', userData);
+    // Generar avatar basado en el número de teléfono
+    const avatarSeed = user.phoneNumber.replace(/\D/g, '');
+    const avatarUrl = `https://api.dicebear.com/7.x/avataaars/svg?seed=${avatarSeed}`;
+    
+    // Formatear número de teléfono para mostrar
+    const displayNumber = user.phoneNumber;
+    
+    chatItem.innerHTML = `
+        <div class="avatar">
+            <img src="${avatarUrl}" alt="${displayNumber}">
+            <div class="status-indicator ${user.status === 'online' ? 'online' : 'offline'}"></div>
+        </div>
+        <div class="chat-info">
+            <div class="chat-name">${displayNumber}</div>
+            <div class="last-message">Toca para iniciar conversación</div>
+        </div>
+        <div class="chat-meta">
+            <div class="time">Activo</div>
+            <div class="language-indicator"></div>
+        </div>
+    `;
+    
+    chatList.appendChild(chatItem);
 }
 
 function showErrorMessage(message) {
@@ -454,22 +457,58 @@ function closeSuccessModal() {
     }
 }
 
-// Verificar si el usuario ya está autenticado al cargar la página
-function checkAuthState() {
-    auth.onAuthStateChanged(function(user) {
-        if (user) {
-            console.log('Usuario ya autenticado:', user);
-            // Si el usuario está autenticado, ir directamente a la lista de chats
-            if (currentScreen === 'intro' || currentScreen === 'register' || currentScreen === 'verification') {
-                switchScreen('chat-list');
-            }
-        } else {
-            console.log('Usuario no autenticado');
-            // Si no está autenticado y está en pantallas protegidas, volver al inicio
-            if (currentScreen === 'chat-list' || currentScreen === 'chat') {
-                switchScreen('intro');
-            }
-        }
+// Limpiar listeners cuando se sale de un chat
+function cleanupChatListeners() {
+    if (messagesListener) {
+        messagesListener.off();
+        messagesListener = null;
+    }
+}
+
+function goToChatList() {
+    cleanupChatListeners();
+    switchScreen('chat-list');
+}
+
+// Optimizar actualizaciones de estado del usuario
+function updateUserStatus(status) {
+    if (currentUser && currentUser.uid) {
+        database.ref(`users/${currentUser.uid}/status`).set(status);
+        database.ref(`users/${currentUser.uid}/lastSeen`).set(firebase.database.ServerValue.TIMESTAMP);
+    }
+}
+
+// Detectar cuando el usuario se va offline
+window.addEventListener('beforeunload', () => {
+    updateUserStatus('offline');
+});
+
+// Detectar cuando el usuario vuelve online
+window.addEventListener('focus', () => {
+    updateUserStatus('online');
+});
+
+window.addEventListener('blur', () => {
+    updateUserStatus('away');
+});
+
+// Función para limpiar datos antiguos (optimización de almacenamiento)
+function cleanupOldData() {
+    const thirtyDaysAgo = Date.now() - (30 * 24 * 60 * 60 * 1000);
+    
+    // Limpiar mensajes antiguos (más de 30 días)
+    database.ref('chats').once('value', snapshot => {
+        const chats = snapshot.val() || {};
+        
+        Object.keys(chats).forEach(chatId => {
+            const messages = chats[chatId].messages || {};
+            
+            Object.keys(messages).forEach(messageId => {
+                if (messages[messageId].timestamp < thirtyDaysAgo) {
+                    database.ref(`chats/${chatId}/messages/${messageId}`).remove();
+                }
+            });
+        });
     });
 }
 
@@ -483,62 +522,124 @@ function hideAddContact() {
 }
 
 function addContact() {
-    const name = document.getElementById('contact-name').value;
-    const phone = document.getElementById('contact-phone').value;
-    const language = document.getElementById('contact-language').value;
-
-    if (name && phone) {
-        // Generar avatar único
-        const avatarUrl = `https://api.dicebear.com/7.x/avataaars/svg?seed=${name}`;
-        
-        // Agregar a la lista de contactos
-        const newContact = { name, phone, language, avatar: avatarUrl };
-        chatContacts.push(newContact);
-        
-        // Crear elemento en la lista de chats
-        const chatList = document.querySelector('.chat-list');
-        const chatItem = document.createElement('div');
-        chatItem.className = 'chat-item';
-        chatItem.onclick = () => openChat(name, language, avatarUrl);
-        
-        chatItem.innerHTML = `
-            <div class="avatar">
-                <img src="${avatarUrl}" alt="${name}">
-                <div class="status-indicator online"></div>
-            </div>
-            <div class="chat-info">
-                <div class="chat-name">${name}</div>
-                <div class="last-message">Usuario agregado recientemente</div>
-            </div>
-            <div class="chat-meta">
-                <div class="time">Ahora</div>
-                <div class="language-indicator"></div>
-            </div>
-        `;
-        
-        chatList.appendChild(chatItem);
-        
-        console.log('Contacto agregado:', newContact);
-        hideAddContact();
-
-        // Limpiar campos
-        document.getElementById('contact-name').value = '';
-        document.getElementById('contact-phone').value = '';
+    const phone = document.getElementById('contact-phone').value.trim();
+    
+    if (!phone) {
+        showErrorMessage('Por favor ingresa un número de teléfono');
+        return;
     }
+
+    // Normalizar número de teléfono
+    const countryCode = document.getElementById('contact-country').value || '+34';
+    const cleanPhone = phone.replace(/\D/g, '');
+    const fullNumber = cleanPhone.startsWith(countryCode.replace('+', '')) ? 
+        '+' + cleanPhone : countryCode + cleanPhone;
+
+    console.log('Buscando contacto:', fullNumber);
+
+    // Buscar usuario en Firebase por número de teléfono
+    database.ref('users').orderByChild('phoneNumber').equalTo(fullNumber).once('value')
+        .then(snapshot => {
+            const users = snapshot.val();
+            
+            if (users) {
+                const userId = Object.keys(users)[0];
+                const user = users[userId];
+                
+                if (user.uid === currentUser.uid) {
+                    showErrorMessage('No puedes agregarte a ti mismo');
+                    return;
+                }
+                
+                showSuccessMessage(`¡Contacto encontrado! ${user.phoneNumber}`);
+                hideAddContact();
+                
+                // Limpiar campos
+                document.getElementById('contact-phone').value = '';
+                
+                // Actualizar lista de contactos
+                loadUserContacts();
+            } else {
+                showErrorMessage('Usuario no encontrado en la plataforma. Invítalo a unirse.');
+            }
+        })
+        .catch(error => {
+            console.error('Error buscando contacto:', error);
+            showErrorMessage('Error buscando contacto. Intenta de nuevo.');
+        });
 }
 
-function openChat(contactName, contactLanguage, avatarUrl) {
+function openChatWithUser(user) {
+    const avatarSeed = user.phoneNumber.replace(/\D/g, '');
+    const avatarUrl = `https://api.dicebear.com/7.x/avataaars/svg?seed=${avatarSeed}`;
+    
     currentChatContact = {
-        name: contactName,
-        language: contactLanguage,
-        avatar: avatarUrl
+        uid: user.uid,
+        name: user.phoneNumber,
+        phoneNumber: user.phoneNumber,
+        avatar: avatarUrl,
+        status: user.status
     };
 
     // Actualizar información del chat
-    document.getElementById('chat-contact-name').textContent = contactName;
+    document.getElementById('chat-contact-name').textContent = user.phoneNumber;
     document.getElementById('chat-avatar').src = avatarUrl;
 
+    // Crear o buscar chat existente
+    const chatId = generateChatId(currentUser.uid, user.uid);
+    loadChatMessages(chatId);
+
     switchScreen('chat');
+}
+
+function generateChatId(uid1, uid2) {
+    // Crear ID único para el chat ordenando los UIDs
+    return [uid1, uid2].sort().join('_');
+}
+
+function loadChatMessages(chatId) {
+    const messagesContainer = document.getElementById('messages-container');
+    messagesContainer.innerHTML = '<div class="loading-messages"><i class="fas fa-spinner fa-spin"></i> Cargando mensajes...</div>';
+
+    // Detener listener anterior si existe
+    if (messagesListener) {
+        messagesListener.off();
+    }
+
+    // Escuchar mensajes en tiempo real
+    messagesListener = database.ref(`chats/${chatId}/messages`).orderByChild('timestamp');
+    messagesListener.on('value', (snapshot) => {
+        const messages = snapshot.val() || {};
+        const messagesList = Object.values(messages).sort((a, b) => a.timestamp - b.timestamp);
+        
+        messagesContainer.innerHTML = '';
+        
+        messagesList.forEach(message => {
+            const isCurrentUser = message.senderId === currentUser.uid;
+            const messageElement = createRealtimeMessageElement(message, isCurrentUser);
+            messagesContainer.appendChild(messageElement);
+        });
+        
+        messagesContainer.scrollTop = messagesContainer.scrollHeight;
+    });
+}
+
+function createRealtimeMessageElement(message, isSent) {
+    const messageDiv = document.createElement('div');
+    messageDiv.className = `message ${isSent ? 'sent' : 'received'}`;
+
+    const date = new Date(message.timestamp);
+    const timeString = date.getHours().toString().padStart(2, '0') + ':' + 
+                      date.getMinutes().toString().padStart(2, '0');
+
+    messageDiv.innerHTML = `
+        <div class="message-content">
+            <div class="original-text">${message.text}</div>
+        </div>
+        <div class="message-time">${timeString}</div>
+    `;
+
+    return messageDiv;
 }
 
 function goToChatList() {
@@ -569,7 +670,7 @@ function sendMessage() {
     const messageInput = document.getElementById('message-input');
     const messageText = messageInput.value.trim();
 
-    if (!messageText) return;
+    if (!messageText || !currentChatContact) return;
 
     // Detectar lenguaje ofensivo antes de enviar
     const moderationResult = checkOffensiveContent(messageText);
@@ -580,33 +681,39 @@ function sendMessage() {
         return;
     }
 
-    // Reproducir sonido de mensaje enviado
-    playMessageSound();
+    // Crear ID del chat
+    const chatId = generateChatId(currentUser.uid, currentChatContact.uid);
+    
+    // Crear objeto del mensaje
+    const messageData = {
+        id: Date.now().toString(),
+        text: messageText,
+        senderId: currentUser.uid,
+        receiverId: currentChatContact.uid,
+        timestamp: firebase.database.ServerValue.TIMESTAMP,
+        status: 'sent'
+    };
 
-    // Traducir mensaje automáticamente si es necesario
-    let translatedText = null;
-    if (currentChatContact && currentChatContact.language !== userLanguage) {
-        translatedText = simulateTranslation(messageText, userLanguage, currentChatContact.language);
-        console.log(`Traducido de ${userLanguage} a ${currentChatContact.language}:`, translatedText);
-    }
-
-    // Crear elemento de mensaje con traducción
-    const messagesContainer = document.getElementById('messages-container');
-    const messageElement = createMessageElement(messageText, true, translatedText);
-
-    messagesContainer.appendChild(messageElement);
-    messagesContainer.scrollTop = messagesContainer.scrollHeight;
-
-    // Analizar mensaje para el sistema de moderación
-    analyzeChatForModeration(messageText, true);
+    // Enviar mensaje a Firebase
+    database.ref(`chats/${chatId}/messages`).push(messageData)
+        .then(() => {
+            console.log('Mensaje enviado exitosamente');
+            playMessageSound();
+            
+            // Actualizar último mensaje del chat
+            database.ref(`chats/${chatId}/lastMessage`).set({
+                text: messageText,
+                timestamp: firebase.database.ServerValue.TIMESTAMP,
+                senderId: currentUser.uid
+            });
+        })
+        .catch(error => {
+            console.error('Error enviando mensaje:', error);
+            showErrorMessage('Error enviando mensaje. Intenta de nuevo.');
+        });
 
     // Limpiar input
     messageInput.value = '';
-
-    // Simular respuesta automática
-    setTimeout(() => {
-        simulateResponse();
-    }, 2000);
 }
 
 function createMessageElement(text, isSent, translatedText = null) {

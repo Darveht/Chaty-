@@ -10,6 +10,7 @@
     <!-- Firebase SDK -->
     <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-database-compat.js"></script>
 </head>
 <body>
     <!-- Pantalla de Introducción -->
@@ -108,50 +109,9 @@
         </div>
 
         <div class="chat-list">
-            <div class="chat-item" onclick="openChat('John Smith', 'en', 'https://api.dicebear.com/7.x/avataaars/svg?seed=John')">
-                <div class="avatar">
-                    <img src="https://api.dicebear.com/7.x/avataaars/svg?seed=John" alt="John">
-                    <div class="status-indicator online"></div>
-                </div>
-                <div class="chat-info">
-                    <div class="chat-name">John Smith</div>
-                    <div class="last-message">Hello! How are you doing?</div>
-                </div>
-                <div class="chat-meta">
-                    <div class="time">10:30</div>
-                    <div class="unread-count">2</div>
-                    <div class="language-indicator"></div>
-                </div>
-            </div>
-
-            <div class="chat-item" onclick="openChat('María García', 'es', 'https://api.dicebear.com/7.x/avataaars/svg?seed=Maria')">
-                <div class="avatar">
-                    <img src="https://api.dicebear.com/7.x/avataaars/svg?seed=Maria" alt="María">
-                    <div class="status-indicator online"></div>
-                </div>
-                <div class="chat-info">
-                    <div class="chat-name">María García</div>
-                    <div class="last-message">¡Hola! ¿Cómo estás?</div>
-                </div>
-                <div class="chat-meta">
-                    <div class="time">09:45</div>
-                    <div class="language-indicator"></div>
-                </div>
-            </div>
-
-            <div class="chat-item" onclick="openChat('Pierre Dubois', 'fr', 'https://api.dicebear.com/7.x/avataaars/svg?seed=Pierre')">
-                <div class="avatar">
-                    <img src="https://api.dicebear.com/7.x/avataaars/svg?seed=Pierre" alt="Pierre">
-                    <div class="status-indicator away"></div>
-                </div>
-                <div class="chat-info">
-                    <div class="chat-name">Pierre Dubois</div>
-                    <div class="last-message">Bonjour! Comment allez-vous?</div>
-                </div>
-                <div class="chat-meta">
-                    <div class="time">Ayer</div>
-                    <div class="language-indicator"></div>
-                </div>
+            <div class="loading-contacts">
+                <i class="fas fa-spinner fa-spin"></i>
+                <p>Cargando contactos...</p>
             </div>
         </div>
 
@@ -261,21 +221,28 @@
                 <button class="close-btn" onclick="hideAddContact()">
                     <i class="fas fa-arrow-left"></i>
                 </button>
-                <h3>Agregar contacto</h3>
+                <h3>Buscar contacto</h3>
             </div>
             <div class="modal-body">
-                <input type="text" id="contact-name" placeholder="Nombre del contacto">
-                <input type="tel" id="contact-phone" placeholder="Número de teléfono">
-                <select id="contact-language">
-                    <option value="es">Español</option>
-                    <option value="en">English</option>
-                    <option value="fr">Français</option>
-                    <option value="de">Deutsch</option>
-                </select>
+                <p>Busca usuarios por su número de teléfono registrado en la plataforma</p>
+                <div class="phone-input-container">
+                    <div class="country-selector">
+                        <select id="contact-country">
+                            <option value="+34">España (+34)</option>
+                            <option value="+1">Estados Unidos (+1)</option>
+                            <option value="+52">México (+52)</option>
+                            <option value="+54">Argentina (+54)</option>
+                            <option value="+55">Brasil (+55)</option>
+                            <option value="+33">Francia (+33)</option>
+                            <option value="+49">Alemania (+49)</option>
+                        </select>
+                    </div>
+                    <input type="tel" id="contact-phone" placeholder="Número de teléfono" maxlength="15">
+                </div>
             </div>
             <div class="modal-footer">
                 <button class="secondary-btn" onclick="hideAddContact()">Cancelar</button>
-                <button class="primary-btn" onclick="addContact()">Agregar</button>
+                <button class="primary-btn" onclick="addContact()">Buscar</button>
             </div>
         </div>
     </div>
