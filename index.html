@@ -6,7 +6,7 @@
     <title>UberChat - Mensajería Global</title>
     <link href="style.css" rel="stylesheet" type="text/css" />
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
-    
+
     <!-- Firebase SDK -->
     <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-auth-compat.js"></script>
@@ -102,7 +102,7 @@
                 <i class="fas fa-plus"></i>
             </button>
         </div>
-        
+
         <div class="search-container">
             <i class="fas fa-search"></i>
             <input type="text" placeholder="Buscar conversaciones..." id="search-input">
@@ -174,20 +174,21 @@
                     </div>
                     <div class="message-time">10:30</div>
                 </div>
-                
+
                 <div class="message sent">
                     <div class="message-content">
                         <div class="original-text">¡Muy bien, gracias! ¿Y tú?</div>
                     </div>
                     <div class="message-time">10:32</div>
                 </div>
-                
+
                 <div class="typing-indicator" id="typing-indicator" style="display: none;">
                     <div class="typing-avatar">
                         <img id="typing-avatar-img" src="" alt="">
                     </div>
                     <div class="typing-bubble">
                         <div class="typing-dots">
+                            <span></span>
                             <span></span>
                             <span></span>
                             <span></span>
@@ -256,7 +257,7 @@
                 </button>
                 <div class="call-status" id="call-status">Llamando...</div>
             </div>
-            
+
             <div class="call-content">
                 <div class="call-avatar">
                     <img id="call-avatar-img" src="" alt="">
@@ -266,7 +267,7 @@
                         <div class="pulse-ring delay-2"></div>
                     </div>
                 </div>
-                
+
                 <div class="call-info">
                     <h2 id="call-contact-name"></h2>
                     <div class="call-duration" id="call-duration">00:00</div>
@@ -347,7 +348,7 @@
                         </div>
                     </div>
                 </div>
-                
+
                 <div class="evidence-section">
                     <h4>Evidencia (opcional)</h4>
                     <p>Puedes adjuntar hasta 3 fotos como evidencia</p>
@@ -403,7 +404,7 @@
                 <i class="fas fa-trash-alt"></i>
             </button>
         </div>
-        
+
         <div class="calls-list" id="calls-list">
             <div class="empty-state">
                 <i class="fas fa-phone-slash"></i>
@@ -422,7 +423,7 @@
                 <i class="fas fa-language"></i>
                 <span>Traducir</span>
             </div>
-            <div class="nav-item active" onclick="showSection('calls')">
+            <div class="nav-item" onclick="showSection('calls')">
                 <i class="fas fa-phone"></i>
                 <span>Llamadas</span>
             </div>
@@ -451,14 +452,14 @@
                     <img id="video-avatar" src="" alt="">
                     <div class="video-name" id="video-contact-name"></div>
                 </div>
-                
+
                 <video id="local-video" class="local-video" autoplay muted></video>
-                
+
                 <div class="video-translation-info">
                     <i class="fas fa-language"></i>
                     <span>Traducción en tiempo real</span>
                 </div>
-                
+
                 <div class="video-speech-text" id="video-speech-text"></div>
             </div>
 
@@ -475,6 +476,40 @@
                 <button class="control-btn end-video-call-btn" onclick="endCall()">
                     <i class="fas fa-phone-slash"></i>
                 </button>
+            </div>
+        </div>
+    </div>
+
+     <!-- Settings Screen -->
+     <div id="settings-screen" class="screen">
+        <div class="settings-container">
+            <div class="settings-header">
+                <h2>Ajustes</h2>
+            </div>
+            <div class="settings-content">
+                <button class="setting-item" onclick="logout()">
+                    <i class="fas fa-sign-out-alt"></i>
+                    <span>Cerrar sesión</span>
+                </button>
+                </div>
+        </div>
+        <!-- Bottom navigation bar -->
+        <div class="bottom-nav">
+            <div class="nav-item" onclick="showSection('chats')">
+                <i class="fas fa-comments"></i>
+                <span>Chats</span>
+            </div>
+            <div class="nav-item" onclick="showSection('translate')">
+                <i class="fas fa-language"></i>
+                <span>Traducir</span>
+            </div>
+            <div class="nav-item" onclick="showSection('calls')">
+                <i class="fas fa-phone"></i>
+                <span>Llamadas</span>
+            </div>
+            <div class="nav-item active" onclick="showSection('settings')">
+                <i class="fas fa-cog"></i>
+                <span>Ajustes</span>
             </div>
         </div>
     </div>

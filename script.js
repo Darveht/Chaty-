@@ -184,24 +184,54 @@ function sendVerificationCode() {
     sendBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Enviando...';
     sendBtn.disabled = true;
 
-    // Generar código aleatorio de 6 dígitos
-    verificationCode = Math.floor(100000 + Math.random() * 900000).toString();
-    console.log('Código generado:', verificationCode);
-    
-    // Simular envío de SMS
-    setTimeout(() => {
-        sendBtn.innerHTML = originalText;
-        sendBtn.disabled = false;
-        
-        // Mostrar el código generado en la consola y en una alerta temporal
-        showSuccessMessage(`Código enviado a ${fullNumber}. Código: ${verificationCode}`);
-        
-        setTimeout(() => {
-            switchScreen('verification');
-            document.querySelector('.code-digit').focus();
-        }, 2000);
-        
-    }, 2000);
+    // Configurar reCAPTCHA para Firebase Auth
+    if (!recaptchaVerifier) {
+        recaptchaVerifier = new firebase.auth.RecaptchaVerifier('recaptcha-container', {
+            'size': 'invisible',
+            'callback': function(response) {
+                console.log('reCAPTCHA resuelto');
+            },
+            'expired-callback': function() {
+                console.log('reCAPTCHA expirado');
+            }
+        });
+    }
+
+    // Enviar SMS real con Firebase
+    firebase.auth().signInWithPhoneNumber(fullNumber, recaptchaVerifier)
+        .then(function(result) {
+            confirmationResult = result;
+            console.log('SMS enviado exitosamente');
+            
+            sendBtn.innerHTML = originalText;
+            sendBtn.disabled = false;
+            
+            showSuccessMessage(`Código enviado a ${fullNumber}`);
+            
+            setTimeout(() => {
+                switchScreen('verification');
+                document.querySelector('.code-digit').focus();
+            }, 2000);
+        })
+        .catch(function(error) {
+            console.error('Error enviando SMS:', error);
+            sendBtn.innerHTML = originalText;
+            sendBtn.disabled = false;
+            
+            if (error.code === 'auth/too-many-requests') {
+                showErrorMessage('Demasiados intentos. Intenta más tarde.');
+            } else if (error.code === 'auth/invalid-phone-number') {
+                showErrorMessage('Número de teléfono inválido.');
+            } else {
+                showErrorMessage('Error enviando código. Intenta de nuevo.');
+            }
+            
+            // Limpiar reCAPTCHA en caso de error
+            if (recaptchaVerifier) {
+                recaptchaVerifier.clear();
+                recaptchaVerifier = null;
+            }
+        });
 }
 
 function goToRegister() {
@@ -246,45 +276,71 @@ function verifyCode() {
     statusElement.className = 'verification-status verifying';
     statusElement.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Verificando<span class="loading-dots"></span>';
 
-    // Verificar el código ingresado con el código generado
-    if (enteredCode === verificationCode) {
-        statusElement.className = 'verification-status success';
-        statusElement.innerHTML = '<i class="fas fa-check-circle"></i> ¡Código verificado!';
-
-        // Crear usuario en Firebase Database
-        const userId = generateUserId(currentPhoneNumber);
-        currentUser = {
-            uid: userId,
-            phoneNumber: currentPhoneNumber,
-            lastSeen: firebase.database.ServerValue.TIMESTAMP,
-            status: 'online'
-        };
-
-        // Guardar usuario en Firebase Database
-        database.ref('users/' + userId).set(currentUser)
-            .then(() => {
-                console.log('Usuario guardado en Firebase:', currentUser);
-                setTimeout(() => {
-                    loadUserContacts();
-                    switchScreen('chat-list');
-                }, 1500);
-            })
-            .catch(error => {
-                console.error('Error guardando usuario:', error);
-                statusElement.className = 'verification-status error';
-                statusElement.innerHTML = '<i class="fas fa-times-circle"></i> Error guardando usuario';
-            });
-    } else {
+    if (!confirmationResult) {
         statusElement.className = 'verification-status error';
-        statusElement.innerHTML = '<i class="fas fa-times-circle"></i> Código inválido';
-
-        // Limpiar campos
-        document.querySelectorAll('.code-digit').forEach(input => {
-            input.value = '';
-        });
-        enteredCode = '';
-        document.querySelector('.code-digit').focus();
+        statusElement.innerHTML = '<i class="fas fa-times-circle"></i> Error: No hay código pendiente';
+        return;
     }
+
+    // Verificar el código con Firebase Auth
+    confirmationResult.confirm(enteredCode)
+        .then(function(result) {
+            // Usuario autenticado exitosamente
+            const user = result.user;
+            console.log('Usuario autenticado:', user);
+            
+            statusElement.className = 'verification-status success';
+            statusElement.innerHTML = '<i class="fas fa-check-circle"></i> ¡Código verificado!';
+
+            // Crear perfil de usuario en Realtime Database
+            currentUser = {
+                uid: user.uid,
+                phoneNumber: user.phoneNumber,
+                lastSeen: firebase.database.ServerValue.TIMESTAMP,
+                status: 'online',
+                createdAt: firebase.database.ServerValue.TIMESTAMP
+            };
+
+            // Guardar usuario en Firebase Realtime Database
+            database.ref('users/' + user.uid).set(currentUser)
+                .then(() => {
+                    console.log('Usuario guardado en Firebase Database:', currentUser);
+                    
+                    // Configurar persistencia de autenticación
+                    firebase.auth().setPersistence(firebase.auth.Auth.Persistence.LOCAL)
+                        .then(() => {
+                            console.log('Persistencia configurada');
+                            setTimeout(() => {
+                                loadUserContacts();
+                                switchScreen('chat-list');
+                            }, 1500);
+                        });
+                })
+                .catch(error => {
+                    console.error('Error guardando usuario:', error);
+                    statusElement.className = 'verification-status error';
+                    statusElement.innerHTML = '<i class="fas fa-times-circle"></i> Error guardando usuario';
+                });
+        })
+        .catch(function(error) {
+            console.error('Error verificando código:', error);
+            statusElement.className = 'verification-status error';
+            
+            if (error.code === 'auth/invalid-verification-code') {
+                statusElement.innerHTML = '<i class="fas fa-times-circle"></i> Código inválido';
+            } else if (error.code === 'auth/code-expired') {
+                statusElement.innerHTML = '<i class="fas fa-times-circle"></i> Código expirado';
+            } else {
+                statusElement.innerHTML = '<i class="fas fa-times-circle"></i> Error verificando código';
+            }
+
+            // Limpiar campos
+            document.querySelectorAll('.code-digit').forEach(input => {
+                input.value = '';
+            });
+            enteredCode = '';
+            document.querySelector('.code-digit').focus();
+        });
 }
 
 function resendCode() {
@@ -307,14 +363,15 @@ function resendCode() {
     recaptchaVerifier = new firebase.auth.RecaptchaVerifier('recaptcha-container', {
         'size': 'invisible',
         'callback': function(response) {
-            console.log('reCAPTCHA solved for resend');
+            console.log('reCAPTCHA resuelto para reenvío');
         }
     });
 
-    // Reenviar código
-    auth.signInWithPhoneNumber(currentPhoneNumber, recaptchaVerifier)
+    // Reenviar código usando Firebase Auth
+    firebase.auth().signInWithPhoneNumber(currentPhoneNumber, recaptchaVerifier)
         .then(function(result) {
             confirmationResult = result;
+            statusElement.className = 'verification-status';
             statusElement.innerHTML = '<i class="fas fa-paper-plane"></i> Código reenviado';
             
             setTimeout(() => {
@@ -324,11 +381,22 @@ function resendCode() {
         .catch(function(error) {
             console.error('Error reenviando código:', error);
             statusElement.className = 'verification-status error';
-            statusElement.innerHTML = '<i class="fas fa-times-circle"></i> Error reenviando código';
+            
+            if (error.code === 'auth/too-many-requests') {
+                statusElement.innerHTML = '<i class="fas fa-times-circle"></i> Demasiados intentos. Espera un momento.';
+            } else {
+                statusElement.innerHTML = '<i class="fas fa-times-circle"></i> Error reenviando código';
+            }
             
             setTimeout(() => {
                 statusElement.innerHTML = '';
             }, 3000);
+            
+            // Limpiar reCAPTCHA en caso de error
+            if (recaptchaVerifier) {
+                recaptchaVerifier.clear();
+                recaptchaVerifier = null;
+            }
         });
 }
 
@@ -491,6 +559,34 @@ window.addEventListener('focus', () => {
 window.addEventListener('blur', () => {
     updateUserStatus('away');
 });
+
+// Función para cerrar sesión
+function logout() {
+    if (currentUser) {
+        updateUserStatus('offline');
+    }
+    
+    firebase.auth().signOut()
+        .then(() => {
+            console.log('Sesión cerrada');
+            currentUser = null;
+            currentPhoneNumber = null;
+            confirmationResult = null;
+            
+            // Limpiar listeners
+            cleanupChatListeners();
+            if (contactsListener) {
+                contactsListener.off();
+                contactsListener = null;
+            }
+            
+            // Volver a la pantalla de intro
+            switchScreen('intro');
+        })
+        .catch(error => {
+            console.error('Error cerrando sesión:', error);
+        });
+}
 
 // Función para limpiar datos antiguos (optimización de almacenamiento)
 function cleanupOldData() {
@@ -660,6 +756,8 @@ function showSection(section) {
         updateCallHistoryUI();
     } else if (section === 'chats') {
         switchScreen('chat-list');
+    } else if (section === 'settings') {
+        switchScreen('settings');
     }
     
     console.log('Mostrando sección:', section);
@@ -1100,9 +1198,60 @@ document.getElementById('search-input').addEventListener('input', function() {
     });
 });
 
+// Función para verificar estado de autenticación
+function checkAuthState() {
+    firebase.auth().onAuthStateChanged(function(user) {
+        if (user) {
+            // Usuario ya autenticado
+            console.log('Usuario ya autenticado:', user);
+            currentPhoneNumber = user.phoneNumber;
+            
+            // Obtener datos del usuario desde Realtime Database
+            database.ref('users/' + user.uid).once('value')
+                .then(snapshot => {
+                    if (snapshot.exists()) {
+                        currentUser = snapshot.val();
+                        currentUser.uid = user.uid; // Asegurar que el UID esté presente
+                        
+                        // Actualizar estado a online
+                        updateUserStatus('online');
+                        
+                        // Ir directamente a la lista de chats
+                        loadUserContacts();
+                        switchScreen('chat-list');
+                    } else {
+                        // Crear perfil si no existe
+                        currentUser = {
+                            uid: user.uid,
+                            phoneNumber: user.phoneNumber,
+                            lastSeen: firebase.database.ServerValue.TIMESTAMP,
+                            status: 'online',
+                            createdAt: firebase.database.ServerValue.TIMESTAMP
+                        };
+                        
+                        database.ref('users/' + user.uid).set(currentUser)
+                            .then(() => {
+                                loadUserContacts();
+                                switchScreen('chat-list');
+                            });
+                    }
+                })
+                .catch(error => {
+                    console.error('Error obteniendo datos del usuario:', error);
+                    // En caso de error, mostrar pantalla de intro
+                    switchScreen('intro');
+                });
+        } else {
+            // Usuario no autenticado, mostrar pantalla de intro
+            console.log('Usuario no autenticado');
+            switchScreen('intro');
+        }
+    });
+}
+
 // Inicialización de la aplicación
 document.addEventListener('DOMContentLoaded', function() {
-    // Configurar pantalla inicial
+    // Configurar pantalla inicial como loading
     switchScreen('intro');
     updateLanguage();
     

@@ -511,6 +511,74 @@ body {
     visibility: hidden !important;
 }
 
+/* Pantalla de Configuración */
+.settings-header {
+    padding: 1.5rem;
+    border-bottom: 1px solid var(--border-color);
+    background: var(--background);
+}
+
+.settings-header h2 {
+    margin: 0;
+    font-size: 1.5rem;
+    font-weight: 700;
+}
+
+.settings-list {
+    padding: 1rem 0;
+    padding-bottom: 100px;
+}
+
+.setting-item {
+    display: flex;
+    align-items: center;
+    padding: 1rem 1.5rem;
+    cursor: pointer;
+    transition: var(--transition);
+    border-bottom: 1px solid rgba(225, 232, 237, 0.3);
+}
+
+.setting-item:hover {
+    background: var(--surface);
+}
+
+.setting-item:active {
+    background: rgba(0, 0, 0, 0.05);
+}
+
+.setting-icon {
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    background: var(--primary-color);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-right: 1rem;
+    color: white;
+}
+
+.setting-info {
+    flex: 1;
+}
+
+.setting-title {
+    font-weight: 600;
+    font-size: 1rem;
+    margin-bottom: 0.25rem;
+}
+
+.setting-description {
+    color: var(--text-secondary);
+    font-size: 0.9rem;
+}
+
+.setting-arrow {
+    color: var(--text-secondary);
+    font-size: 0.8rem;
+}
+}
+
 /* Estados de carga */
 .loading-contacts, .loading-messages {
     display: flex;
