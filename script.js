@@ -10,6 +10,13 @@ const firebaseConfig = {
     measurementId: "G-P29ME5Z3S1"
 };
 
+// Cloudinary Configuration
+const CLOUDINARY_CONFIG = {
+    cloudName: 'dqzkwfs7d',
+    apiKey: '238548142884869',
+    uploadPreset: 'uberchat_uploads'
+};
+
 // Initialize Firebase
 firebase.initializeApp(firebaseConfig);
 const auth = firebase.auth();
@@ -1061,12 +1068,66 @@ function selectNewAvatar() {
 function handleAvatarChange(event) {
     const file = event.target.files[0];
     if (file && file.type.startsWith('image/')) {
-        const reader = new FileReader();
-        reader.onload = function(e) {
-            document.getElementById('avatar-preview').src = e.target.result;
-            document.getElementById('profile-avatar').src = e.target.result;
-        };
-        reader.readAsDataURL(file);
+        // Mostrar loading
+        const preview = document.getElementById('avatar-preview');
+        const profileAvatar = document.getElementById('profile-avatar');
+        
+        preview.style.opacity = '0.5';
+        profileAvatar.style.opacity = '0.5';
+        
+        // Subir a Cloudinary
+        uploadToCloudinary(file, 'image')
+            .then(imageUrl => {
+                preview.src = imageUrl;
+                profileAvatar.src = imageUrl;
+                preview.style.opacity = '1';
+                profileAvatar.style.opacity = '1';
+                
+                // Guardar en Firebase inmediatamente
+                if (currentUser) {
+                    currentUser.avatar = imageUrl;
+                    database.ref(`users/${currentUser.uid}/avatar`).set(imageUrl);
+                }
+                
+                showSuccessMessage('📸 Foto de perfil actualizada');
+            })
+            .catch(error => {
+                console.error('Error subiendo imagen:', error);
+                preview.style.opacity = '1';
+                profileAvatar.style.opacity = '1';
+                showErrorMessage('Error subiendo imagen. Intenta de nuevo.');
+            });
+    }
+}
+
+// Función para subir archivos a Cloudinary
+async function uploadToCloudinary(file, resourceType = 'image') {
+    const formData = new FormData();
+    formData.append('file', file);
+    formData.append('upload_preset', CLOUDINARY_CONFIG.uploadPreset);
+    formData.append('cloud_name', CLOUDINARY_CONFIG.cloudName);
+    
+    if (resourceType === 'image') {
+        formData.append('folder', 'uberchat/avatars');
+    } else {
+        formData.append('folder', 'uberchat/messages');
+    }
+    
+    try {
+        const response = await fetch(`https://api.cloudinary.com/v1_1/${CLOUDINARY_CONFIG.cloudName}/${resourceType}/upload`, {
+            method: 'POST',
+            body: formData
+        });
+        
+        if (!response.ok) {
+            throw new Error('Error en la subida');
+        }
+        
+        const data = await response.json();
+        return data.secure_url;
+    } catch (error) {
+        console.error('Error subiendo a Cloudinary:', error);
+        throw error;
     }
 }
 
@@ -1346,24 +1407,41 @@ function sendFriendRequest(targetUserId, targetUserPhone) {
         id: requestId,
         from: currentUser.uid,
         fromPhone: currentUser.phoneNumber,
+        fromAvatar: currentUser.avatar || `https://api.dicebear.com/7.x/avataaars/svg?seed=${currentUser.phoneNumber}`,
         to: targetUserId,
         toPhone: targetUserPhone,
         timestamp: firebase.database.ServerValue.TIMESTAMP,
         status: 'pending'
     };
 
-    // Simular envío instantáneo
+    // Cerrar tarjeta de usuario
     closeUserFoundCard();
 
-    // Mostrar notificación instantánea al usuario
-    showInstantNotification(`Solicitud enviada a ${targetUserPhone}`, 'friend-request');
-
-    // Simular que llega al destinatario instantáneamente
-    setTimeout(() => {
-        // Simular que el destinatario recibe la solicitud
-        console.log('Solicitud recibida por el destinatario');
-        showFriendRequestModal(requestData, requestId);
-    }, 2000); // 2 segundos para simular el envío
+    // Enviar solicitud real a Firebase
+    database.ref(`friendRequests/${targetUserId}/${requestId}`).set(requestData)
+        .then(() => {
+            console.log('Solicitud enviada exitosamente a Firebase');
+            showInstantNotification(`✅ Solicitud enviada a ${targetUserPhone}`, 'friend-request');
+            
+            // Crear notificación para el destinatario
+            const notificationData = {
+                type: 'friend_request',
+                from: currentUser.uid,
+                fromPhone: currentUser.phoneNumber,
+                fromAvatar: currentUser.avatar || `https://api.dicebear.com/7.x/avataaars/svg?seed=${currentUser.phoneNumber}`,
+                requestId: requestId,
+                timestamp: firebase.database.ServerValue.TIMESTAMP,
+                read: false
+            };
+            
+            // Enviar notificación instantánea al destinatario
+            database.ref(`notifications/${targetUserId}`).push(notificationData);
+            
+        })
+        .catch(error => {
+            console.error('Error enviando solicitud:', error);
+            showErrorMessage('Error enviando solicitud. Intenta de nuevo.');
+        });
 }
 
 // Función para configurar listener de solicitudes de amistad
@@ -1458,27 +1536,57 @@ function acceptFriendRequest(requestId, fromUserId) {
     // Actualizar estado de la solicitud
     database.ref(`friendRequests/${currentUser.uid}/${requestId}/status`).set('accepted')
         .then(() => {
+            // Obtener datos del usuario que envió la solicitud
+            return database.ref(`users/${fromUserId}`).once('value');
+        })
+        .then(userSnapshot => {
+            const userData = userSnapshot.val();
+            
             // Agregar a ambos usuarios como contactos
             const contactData = {
                 addedAt: firebase.database.ServerValue.TIMESTAMP,
                 status: 'active'
             };
 
-            // Agregar contacto al usuario actual
-            database.ref(`contacts/${currentUser.uid}/${fromUserId}`).set(contactData);
+            // Promesas para agregar contactos
+            const addContact1 = database.ref(`contacts/${currentUser.uid}/${fromUserId}`).set(contactData);
+            const addContact2 = database.ref(`contacts/${fromUserId}/${currentUser.uid}`).set(contactData);
 
-            // Agregar contacto al usuario remitente
-            database.ref(`contacts/${fromUserId}/${currentUser.uid}`).set(contactData);
-
+            return Promise.all([addContact1, addContact2, userData]);
+        })
+        .then(([_, __, userData]) => {
             closeFriendRequestModal();
-            showFullScreenMessage('✅ ¡Contacto Agregado!', 
-                'Ahora pueden enviarse mensajes y realizar videollamadas.', 
-                'success');
-
-            // Recargar lista de contactos
+            
+            // Crear objeto de contacto para el chat
+            const newContact = {
+                uid: fromUserId,
+                name: userData.phoneNumber,
+                phoneNumber: userData.phoneNumber,
+                avatar: userData.avatar || `https://api.dicebear.com/7.x/avataaars/svg?seed=${userData.phoneNumber}`,
+                status: userData.status
+            };
+            
+            // Configurar contacto actual y abrir chat directamente
+            currentChatContact = newContact;
+            
+            // Actualizar información del chat
+            document.getElementById('chat-contact-name').textContent = userData.phoneNumber;
+            document.getElementById('chat-avatar').src = newContact.avatar;
+            
+            // Crear o buscar chat existente
+            const chatId = generateChatId(currentUser.uid, fromUserId);
+            loadChatMessages(chatId);
+            
+            // Ir directamente al chat
+            switchScreen('chat');
+            
+            // Mostrar mensaje de bienvenida
+            showInstantNotification(`💬 ¡Ahora puedes chatear con ${userData.phoneNumber}!`, 'friend-request');
+            
+            // Recargar lista de contactos en segundo plano
             setTimeout(() => {
                 loadUserContacts();
-            }, 2000);
+            }, 1000);
         })
         .catch(error => {
             console.error('Error aceptando solicitud:', error);
@@ -1900,28 +2008,58 @@ function handleImageSelect(event) {
 }
 
 function sendImageMessage(file) {
-    const reader = new FileReader();
-    reader.onload = function(e) {
-        const messagesContainer = document.getElementById('messages-container');
+    if (!currentChatContact) return;
+    
+    const messagesContainer = document.getElementById('messages-container');
+    const chatId = generateChatId(currentUser.uid, currentChatContact.uid);
 
-        // Crear mensaje con imagen cargando
-        const messageElement = createImageMessage(null, true, true);
-        messagesContainer.appendChild(messageElement);
-        messagesContainer.scrollTop = messagesContainer.scrollHeight;
+    // Crear mensaje con imagen cargando
+    const messageElement = createImageMessage(null, true, true);
+    messagesContainer.appendChild(messageElement);
+    messagesContainer.scrollTop = messagesContainer.scrollHeight;
 
-        // Simular carga de imagen
-        setTimeout(() => {
-            // Reemplazar con imagen real
+    // Subir imagen a Cloudinary
+    uploadToCloudinary(file, 'image')
+        .then(imageUrl => {
+            // Reemplazar elemento de carga con imagen real
             const imageElement = messageElement.querySelector('.image-loading');
-            imageElement.outerHTML = `<img src="${e.target.result}" alt="Imagen enviada" onclick="expandImage(this)">`;
-        }, 2000);
+            imageElement.outerHTML = `<img src="${imageUrl}" alt="Imagen enviada" onclick="expandImage(this)">`;
+            
+            // Crear mensaje en Firebase
+            const messageData = {
+                id: Date.now().toString(),
+                type: 'image',
+                imageUrl: imageUrl,
+                senderId: currentUser.uid,
+                receiverId: currentChatContact.uid,
+                timestamp: firebase.database.ServerValue.TIMESTAMP,
+                status: 'sent'
+            };
 
-        // Simular respuesta
-        setTimeout(() => {
-            simulateResponse();
-        }, 4000);
-    };
-    reader.readAsDataURL(file);
+            // Enviar mensaje a Firebase
+            database.ref(`chats/${chatId}/messages`).push(messageData)
+                .then(() => {
+                    console.log('Imagen enviada exitosamente');
+                    playMessageSound();
+
+                    // Actualizar último mensaje del chat
+                    database.ref(`chats/${chatId}/lastMessage`).set({
+                        text: '📷 Imagen',
+                        timestamp: firebase.database.ServerValue.TIMESTAMP,
+                        senderId: currentUser.uid
+                    });
+                })
+                .catch(error => {
+                    console.error('Error enviando imagen:', error);
+                    showErrorMessage('Error enviando imagen.');
+                });
+        })
+        .catch(error => {
+            console.error('Error subiendo imagen:', error);
+            // Remover mensaje de carga si falla
+            messageElement.remove();
+            showErrorMessage('Error subiendo imagen. Intenta de nuevo.');
+        });
 }
 
 function createImageMessage(imageSrc, isSent, isLoading = false) {
@@ -2045,59 +2183,135 @@ document.getElementById('search-input').addEventListener('input', function() {
 
 // Función para verificar estado de autenticación
 function checkAuthState() {
-    firebase.auth().onAuthStateChanged(function(user) {
-        if (user) {
-            // Usuario ya autenticado
-            console.log('Usuario ya autenticado:', user);
-            currentPhoneNumber = user.phoneNumber;
+    // Configurar persistencia de autenticación primero
+    firebase.auth().setPersistence(firebase.auth.Auth.Persistence.LOCAL)
+        .then(() => {
+            firebase.auth().onAuthStateChanged(function(user) {
+                if (user) {
+                    // Usuario ya autenticado
+                    console.log('Usuario ya autenticado:', user);
+                    currentPhoneNumber = user.phoneNumber;
 
-            // Obtener datos del usuario desde Realtime Database
-            database.ref('users/' + user.uid).once('value')
-                .then(snapshot => {
-                    if (snapshot.exists()) {
-                        currentUser = snapshot.val();
-                        currentUser.uid = user.uid; // Asegurar que el UID esté presente
+                    // Obtener datos del usuario desde Realtime Database
+                    database.ref('users/' + user.uid).once('value')
+                        .then(snapshot => {
+                            if (snapshot.exists()) {
+                                currentUser = snapshot.val();
+                                currentUser.uid = user.uid; // Asegurar que el UID esté presente
 
-                        // Actualizar estado a online
-                        updateUserStatus('online');
+                                // Actualizar estado a online
+                                updateUserStatus('online');
 
-                        // Crear o restaurar sesión activa
-                        createActiveSession(user.uid, user.phoneNumber);
+                                // Crear o restaurar sesión activa
+                                createActiveSession(user.uid, user.phoneNumber);
 
-                        // Configurar listener para solicitudes de aprobación
-                        setupLoginApprovalListener(user.uid);
+                                // Configurar listeners importantes
+                                setupLoginApprovalListener(user.uid);
+                                setupFriendRequestsListener();
+                                setupNotificationsListener();
 
-                        // Ir directamente a la lista de chats
-                        loadUserContacts();
-                        switchScreen('chat-list');
-                    } else {
-                        // Crear perfil si no existe
-                        currentUser = {
-                            uid: user.uid,
-                            phoneNumber: user.phoneNumber,
-                            lastSeen: firebase.database.ServerValue.TIMESTAMP,
-                            status: 'online',
-                            createdAt: firebase.database.ServerValue.TIMESTAMP
-                        };
+                                // Inicializar configuraciones
+                                initializeSettings();
 
-                        database.ref('users/' + user.uid).set(currentUser)
-                            .then(() => {
+                                // Ir directamente a la lista de chats
                                 loadUserContacts();
                                 switchScreen('chat-list');
-                            });
-                    }
-                })
-                .catch(error => {
-                    console.error('Error obteniendo datos del usuario:', error);
-                    // En caso de error, mostrar pantalla de intro
+                                
+                                console.log('Sesión restaurada exitosamente');
+                            } else {
+                                // Crear perfil si no existe
+                                currentUser = {
+                                    uid: user.uid,
+                                    phoneNumber: user.phoneNumber,
+                                    lastSeen: firebase.database.ServerValue.TIMESTAMP,
+                                    status: 'online',
+                                    createdAt: firebase.database.ServerValue.TIMESTAMP,
+                                    avatar: `https://api.dicebear.com/7.x/avataaars/svg?seed=${user.phoneNumber}`
+                                };
+
+                                database.ref('users/' + user.uid).set(currentUser)
+                                    .then(() => {
+                                        setupFriendRequestsListener();
+                                        setupNotificationsListener();
+                                        initializeSettings();
+                                        loadUserContacts();
+                                        switchScreen('chat-list');
+                                    });
+                            }
+                        })
+                        .catch(error => {
+                            console.error('Error obteniendo datos del usuario:', error);
+                            // En caso de error, mostrar pantalla de intro
+                            switchScreen('intro');
+                        });
+                } else {
+                    // Usuario no autenticado, mostrar pantalla de intro
+                    console.log('Usuario no autenticado');
                     switchScreen('intro');
-                });
-        } else {
-            // Usuario no autenticado, mostrar pantalla de intro
-            console.log('Usuario no autenticado');
+                }
+            });
+        })
+        .catch(error => {
+            console.error('Error configurando persistencia:', error);
             switchScreen('intro');
+        });
+}
+
+// Configurar listener para notificaciones
+function setupNotificationsListener() {
+    if (!currentUser || !currentUser.uid) return;
+
+    database.ref(`notifications/${currentUser.uid}`).on('child_added', (snapshot) => {
+        const notification = snapshot.val();
+        const notificationId = snapshot.key;
+        
+        if (notification && !notification.read) {
+            console.log('Nueva notificación recibida:', notification);
+            
+            if (notification.type === 'friend_request') {
+                // Buscar la solicitud completa
+                database.ref(`friendRequests/${currentUser.uid}/${notification.requestId}`).once('value')
+                    .then(requestSnapshot => {
+                        if (requestSnapshot.exists()) {
+                            const request = requestSnapshot.val();
+                            showFriendRequestModal(request, notification.requestId);
+                            
+                            // Marcar notificación como leída
+                            database.ref(`notifications/${currentUser.uid}/${notificationId}/read`).set(true);
+                        }
+                    });
+            }
         }
     });
+}
+
+// Mantener la conexión activa
+function maintainConnection() {
+    if (currentUser && currentUser.uid) {
+        // Actualizar presencia cada 30 segundos
+        setInterval(() => {
+            if (currentUser) {
+                database.ref(`users/${currentUser.uid}/lastSeen`).set(firebase.database.ServerValue.TIMESTAMP);
+                database.ref(`users/${currentUser.uid}/status`).set('online');
+            }
+        }, 30000);
+        
+        // Configurar detección de desconexión
+        database.ref('.info/connected').on('value', (snapshot) => {
+            if (snapshot.val() === true) {
+                console.log('Conectado a Firebase');
+                if (currentUser) {
+                    database.ref(`users/${currentUser.uid}/status`).set('online');
+                }
+            } else {
+                console.log('Desconectado de Firebase');
+            }
+        });
+        
+        // Al desconectarse, marcar como offline
+        database.ref(`users/${currentUser.uid}/status`).onDisconnect().set('offline');
+        database.ref(`users/${currentUser.uid}/lastSeen`).onDisconnect().set(firebase.database.ServerValue.TIMESTAMP);
+    }
 }
 
 // Inicialización de la aplicación
@@ -2136,10 +2350,12 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     });
 
-    console.log('UberChat iniciado correctamente');
+    // Configurar mantenimiento de conexión
+    setTimeout(() => {
+        maintainConnection();
+    }, 2000);
 
-     // Configurar listener para solicitudes de amistad al cargar
-    setupFriendRequestsListener();
+    console.log('UberChat iniciado correctamente');
 });
 
 // Función para implementar traducción real con Google Translate API
@@ -2989,6 +3205,9 @@ function closeFullScreenMessage() {
 }
 
 function showAutoGeneratedCodeMessage(code) {
+    // Cerrar cualquier modal pequeño existente
+    closeSuccessModal();
+    
     // Crear pantalla completa para mostrar el código
     const codeScreen = document.createElement('div');
     codeScreen.id = 'verification-code-screen';
