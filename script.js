@@ -164,7 +164,12 @@ phoneInput.addEventListener('input', function() {
 function sendVerificationCode() {
     const countryCode = document.getElementById('country-select').value;
     const phoneNumber = document.getElementById('phone-input').value;
-    const fullNumber = `${countryCode}${phoneNumber}`;
+    
+    // Limpiar el número de teléfono (remover espacios y caracteres no numéricos)
+    const cleanPhoneNumber = phoneNumber.replace(/\D/g, '');
+    const fullNumber = `${countryCode}${cleanPhoneNumber}`;
+    
+    console.log('Enviando código a:', fullNumber);
     
     currentPhoneNumber = fullNumber;
     document.getElementById('phone-display').textContent = fullNumber;
@@ -175,45 +180,82 @@ function sendVerificationCode() {
     sendBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Enviando...';
     sendBtn.disabled = true;
 
-    // Inicializar reCAPTCHA verifier si no existe
-    if (!recaptchaVerifier) {
-        recaptchaVerifier = new firebase.auth.RecaptchaVerifier('recaptcha-container', {
-            'size': 'invisible',
-            'callback': function(response) {
-                console.log('reCAPTCHA solved');
-            }
-        });
+    // Limpiar reCAPTCHA anterior si existe
+    if (recaptchaVerifier) {
+        recaptchaVerifier.clear();
     }
 
-    // Enviar código SMS usando Firebase
-    auth.signInWithPhoneNumber(fullNumber, recaptchaVerifier)
-        .then(function(result) {
-            confirmationResult = result;
-            console.log('Código SMS enviado exitosamente');
-            
-            // Restaurar botón y cambiar a pantalla de verificación
-            sendBtn.innerHTML = originalText;
-            sendBtn.disabled = false;
-            
+    // Crear nuevo reCAPTCHA verifier
+    recaptchaVerifier = new firebase.auth.RecaptchaVerifier('recaptcha-container', {
+        'size': 'invisible',
+        'callback': function(response) {
+            console.log('reCAPTCHA resuelto:', response);
+        },
+        'expired-callback': function() {
+            console.log('reCAPTCHA expirado');
+        },
+        'error-callback': function(error) {
+            console.log('Error en reCAPTCHA:', error);
+        }
+    });
+
+    // Render del reCAPTCHA
+    recaptchaVerifier.render().then(function(widgetId) {
+        console.log('reCAPTCHA renderizado con ID:', widgetId);
+        
+        // Enviar código SMS usando Firebase
+        return auth.signInWithPhoneNumber(fullNumber, recaptchaVerifier);
+    }).then(function(result) {
+        confirmationResult = result;
+        console.log('Código SMS enviado exitosamente a:', fullNumber);
+        
+        // Restaurar botón y cambiar a pantalla de verificación
+        sendBtn.innerHTML = originalText;
+        sendBtn.disabled = false;
+        
+        // Mostrar mensaje de éxito temporal
+        showSuccessMessage('Código enviado a ' + fullNumber);
+        
+        setTimeout(() => {
             switchScreen('verification');
             document.querySelector('.code-digit').focus();
-        })
-        .catch(function(error) {
-            console.error('Error enviando SMS:', error);
-            
-            // Restaurar botón y mostrar error
-            sendBtn.innerHTML = originalText;
-            sendBtn.disabled = false;
-            
-            // Mostrar mensaje de error al usuario
-            showErrorMessage('Error enviando código: ' + error.message);
-            
-            // Resetear reCAPTCHA
-            if (recaptchaVerifier) {
-                recaptchaVerifier.clear();
-                recaptchaVerifier = null;
-            }
-        });
+        }, 1500);
+        
+    }).catch(function(error) {
+        console.error('Error detallado:', error);
+        
+        // Restaurar botón
+        sendBtn.innerHTML = originalText;
+        sendBtn.disabled = false;
+        
+        let errorMessage = 'Error enviando código: ';
+        
+        // Manejar errores específicos
+        switch(error.code) {
+            case 'auth/invalid-phone-number':
+                errorMessage += 'Número de teléfono inválido. Verifica el formato.';
+                break;
+            case 'auth/too-many-requests':
+                errorMessage += 'Demasiados intentos. Intenta más tarde.';
+                break;
+            case 'auth/quota-exceeded':
+                errorMessage += 'Se ha superado la cuota diaria de SMS.';
+                break;
+            case 'auth/captcha-check-failed':
+                errorMessage += 'Verificación de seguridad fallida. Intenta de nuevo.';
+                break;
+            default:
+                errorMessage += error.message || 'Error desconocido';
+        }
+        
+        showErrorMessage(errorMessage);
+        
+        // Resetear reCAPTCHA
+        if (recaptchaVerifier) {
+            recaptchaVerifier.clear();
+            recaptchaVerifier = null;
+        }
+    });
 }
 
 function goToRegister() {
@@ -370,16 +412,45 @@ function showErrorMessage(message) {
     
     document.body.appendChild(errorModal);
     
-    // Auto-cerrar después de 5 segundos
+    // Auto-cerrar después de 8 segundos
     setTimeout(() => {
         closeErrorModal();
-    }, 5000);
+    }, 8000);
+}
+
+function showSuccessMessage(message) {
+    // Crear y mostrar modal de éxito
+    const successModal = document.createElement('div');
+    successModal.className = 'success-modal';
+    successModal.innerHTML = `
+        <div class="success-content">
+            <div class="success-icon">
+                <i class="fas fa-check-circle"></i>
+            </div>
+            <h3>¡Éxito!</h3>
+            <p>${message}</p>
+        </div>
+    `;
+    
+    document.body.appendChild(successModal);
+    
+    // Auto-cerrar después de 3 segundos
+    setTimeout(() => {
+        closeSuccessModal();
+    }, 3000);
 }
 
 function closeErrorModal() {
     const errorModal = document.querySelector('.error-modal');
     if (errorModal) {
         document.body.removeChild(errorModal);
+    }
+}
+
+function closeSuccessModal() {
+    const successModal = document.querySelector('.success-modal');
+    if (successModal) {
+        document.body.removeChild(successModal);
     }
 }
 
