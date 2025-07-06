@@ -832,10 +832,11 @@ function verifyCode() {
                     // Crear sesión activa
                     createActiveSession(user.uid, user.phoneNumber);
 
-                    // Configurar listeners importantes
+                    // Configurar listeners importantes inmediatamente
                     setupLoginApprovalListener(user.uid);
                     setupFriendRequestsListener();
                     setupNotificationsListener();
+                    setupCallRequestsListener();
 
                     // Inicializar configuraciones
                     initializeSettings();
@@ -2378,11 +2379,11 @@ function sendCallRequest(callType) {
                 read: false
             };
 
-            // Enviar notificación
-            database.ref(`notifications/${currentChatContact.uid}`).push(notificationData);
+            // Enviar notificación y actualizar flag inmediatamente
+            const notificationPromise = database.ref(`notifications/${currentChatContact.uid}`).push(notificationData);
             
             // Actualizar flag de llamada entrante
-            database.ref(`users/${currentChatContact.uid}/incomingCall`).set({
+            const incomingCallPromise = database.ref(`users/${currentChatContact.uid}/incomingCall`).set({
                 type: callType,
                 from: currentUser.uid,
                 fromPhone: currentUser.phoneNumber,
@@ -2391,6 +2392,15 @@ function sendCallRequest(callType) {
                 callRequestId: callRequestId,
                 timestamp: Date.now()
             });
+            
+            // Asegurar que ambas operaciones se completen
+            Promise.all([notificationPromise, incomingCallPromise])
+                .then(() => {
+                    console.log('Notificación de llamada enviada exitosamente');
+                })
+                .catch(error => {
+                    console.error('Error enviando notificación de llamada:', error);
+                });
 
         })
         .catch(error => {
@@ -2523,6 +2533,17 @@ function setupCallRequestsListener() {
     }
 
     console.log('Configurando listener de llamadas para:', currentUser.uid);
+    
+    // Asegurar que Firebase esté conectado
+    database.ref('.info/connected').once('value', (snapshot) => {
+        if (snapshot.val() === true) {
+            console.log('Firebase conectado - configurando listeners de llamadas');
+        } else {
+            console.warn('Firebase no conectado - reintentando en 3 segundos');
+            setTimeout(setupCallRequestsListener, 3000);
+            return;
+        }
+    });
 
     // Limpiar listener anterior
     if (callRequestListener) {
@@ -3645,6 +3666,9 @@ function checkAuthState() {
                         setupFriendRequestsListener();
                         setupNotificationsListener();
                         setupCallRequestsListener();
+                        
+                        // Mantener conexión activa
+                        maintainConnection();
                         
                         // Inicializar configuraciones
                         initializeSettings();

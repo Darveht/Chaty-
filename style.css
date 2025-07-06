@@ -47,6 +47,7 @@ body {
     opacity: 1;
     transform: translateX(0);
     z-index: 10;
+}
 
 /* Estilos para llamadas entrantes */
 .incoming-call-screen {
@@ -3737,6 +3738,8 @@ body {
     font-weight: 600;
     color: #ff4757;
 }
+
+/* Fix missing closing brace for incoming call section */
 
 /* Pantalla de Resultado del Reporte */
 .report-result-container {
