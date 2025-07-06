@@ -957,31 +957,28 @@ function loadUserContacts() {
 
 function createContactItem(user) {
     const chatList = document.querySelector('.chat-list');
-    const chatItem = document.createElement('div');
-    chatItem.className = 'chat-item';
-    chatItem.onclick = () => openChatWithUser(user);
-
+    
+    // Crear contenedor principal del chat con funcionalidad de deslizado
+    const chatContainer = document.createElement('div');
+    chatContainer.className = 'chat-container-swipe';
+    chatContainer.dataset.userId = user.uid;
+    
     // Determinar avatar a mostrar basado en configuraciones de privacidad del usuario
     let avatarUrl;
     if (user.profilePhotoVisible !== false) {
-        // Usar avatar personalizado si está disponible y es visible
         const avatarSeed = user.phoneNumber.replace(/\D/g, '');
         avatarUrl = user.avatar || `https://api.dicebear.com/7.x/avataaars/svg?seed=${avatarSeed}`;
     } else {
-        // Usar avatar genérico si la foto de perfil está oculta
         avatarUrl = 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNDAiIGhlaWdodD0iNDAiIHZpZXdCb3g9IjAgMCA0MCA0MCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPGNpcmNsZSBjeD0iMjAiIGN5PSIyMCIgcj0iMjAiIGZpbGw9IiNjY2MiLz4KPHN2ZyB3aWR0aD0iMjAiIGhlaWdodD0iMjAiIHZpZXdCb3g9IjAgMCAyMCAyMCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIiBzdHlsZT0idHJhbnNmb3JtOiB0cmFuc2xhdGUoNTAlLCA1MCUpOyI+CjxwYXRoIGQ9Ik0xMCA5QzExLjY1NjkgOSAxMyA3LjY1NjkgMTMgNkMxMyA0LjM0MzEgMTEuNjU2OSAzIDEwIDNDOC4zNDMxNSAzIDcgNC4zNDMxIDcgNkM3IDcuNjU2OSA4LjM0MzE1IDkgMTAgOVoiIGZpbGw9IndoaXRlIi8+CjxwYXRoIGQ9Ik0xMCAxMUM3IDExIDQgMTMgNCAxNlYxN0gxNlYxNkMxNiAxMyAxMyAxMSAxMCAxMVoiIGZpbGw9IndoaXRlIi8+Cjwvc3ZnPgo8L3N2Zz4K';
     }
 
-    // Determinar nombre a mostrar
     const displayName = user.username || user.phoneNumber;
     
-    // Determinar estado de conexión visible
     let statusIndicator = '';
     if (user.onlineStatusVisible !== false) {
         statusIndicator = `<div class="status-indicator ${user.status === 'online' ? 'online' : 'offline'}"></div>`;
     }
 
-    // Determinar última conexión visible
     let lastSeenText = 'Toca para iniciar conversación';
     if (user.lastSeenVisible !== false && user.lastSeen) {
         const lastSeenDate = new Date(user.lastSeen);
@@ -997,24 +994,61 @@ function createContactItem(user) {
         }
     }
 
-    chatItem.innerHTML = `
-        <div class="avatar">
-            <img src="${avatarUrl}" alt="${displayName}">
-            ${statusIndicator}
+    // Verificar si el chat está silenciado
+    const isMuted = isChatMuted(user.uid);
+    const mutedClass = isMuted ? 'muted' : '';
+    const mutedIndicator = isMuted ? '<i class="fas fa-volume-mute muted-indicator"></i>' : '';
+
+    chatContainer.innerHTML = `
+        <!-- Acciones de deslizado (ocultas por defecto) -->
+        <div class="swipe-actions">
+            <button class="swipe-action mute-action" onclick="toggleMuteChat('${user.uid}', '${displayName}')">
+                <i class="fas fa-${isMuted ? 'volume-up' : 'volume-mute'}"></i>
+                <span>${isMuted ? 'Activar' : 'Silenciar'}</span>
+            </button>
+            <button class="swipe-action delete-action" onclick="deleteChat('${user.uid}', '${displayName}')">
+                <i class="fas fa-trash-alt"></i>
+                <span>Eliminar</span>
+            </button>
         </div>
-        <div class="chat-info">
-            <div class="chat-name">${displayName}</div>
-            <div class="last-message">${lastSeenText}</div>
-        </div>
-        <div class="chat-meta">
-            <div class="time">
-                ${user.callsEnabled !== false ? '<i class="fas fa-phone" style="color: var(--accent-color); font-size: 0.8rem;"></i>' : '<i class="fas fa-phone-slash" style="color: var(--text-secondary); font-size: 0.8rem;"></i>'}
+        
+        <!-- Contenido principal del chat -->
+        <div class="chat-item ${mutedClass}" onclick="openChatWithUser(${JSON.stringify(user).replace(/"/g, '&quot;')})">
+            <div class="avatar">
+                <img src="${avatarUrl}" alt="${displayName}">
+                ${statusIndicator}
             </div>
-            <div class="language-indicator"></div>
+            <div class="chat-info">
+                <div class="chat-name">
+                    ${displayName}
+                    ${mutedIndicator}
+                </div>
+                <div class="last-message">${lastSeenText}</div>
+            </div>
+            <div class="chat-meta">
+                <div class="time">
+                    ${user.callsEnabled !== false ? '<i class="fas fa-phone" style="color: var(--accent-color); font-size: 0.8rem;"></i>' : '<i class="fas fa-phone-slash" style="color: var(--text-secondary); font-size: 0.8rem;"></i>'}
+                </div>
+                <div class="language-indicator"></div>
+            </div>
         </div>
     `;
 
-    chatList.appendChild(chatItem);
+    // Agregar eventos de touch para el deslizado
+    const chatItem = chatContainer.querySelector('.chat-item');
+    
+    // Eventos para móviles (touch)
+    chatItem.addEventListener('touchstart', handleTouchStart, { passive: false });
+    chatItem.addEventListener('touchmove', handleTouchMove, { passive: false });
+    chatItem.addEventListener('touchend', handleTouchEnd, { passive: false });
+    
+    // Eventos para desktop (mouse)
+    chatItem.addEventListener('mousedown', handleMouseDown);
+    chatItem.addEventListener('mousemove', handleMouseMove);
+    chatItem.addEventListener('mouseup', handleMouseUp);
+    chatItem.addEventListener('mouseleave', handleMouseUp);
+
+    chatList.appendChild(chatContainer);
 }
 
 function showErrorMessage(message) {
@@ -1343,6 +1377,13 @@ let privacySettings = {
     statusVisible: true,
     onlineStatusVisible: true
 };
+
+// Variables para el sistema de deslizado y silenciado
+let swipeStartX = 0;
+let swipeStartY = 0;
+let currentSwipeItem = null;
+let isSwipeActive = false;
+let mutedChats = new Map(); // Map para guardar chats silenciados con timestamp
 
 // Funciones para la sección de ajustes
 function initializeSettings() {
@@ -2570,6 +2611,13 @@ function loadChatMessages(chatId) {
 
         messagesList.forEach(message => {
             const isCurrentUser = message.senderId === currentUser.uid;
+            
+            // Filtrar mensajes si el chat está silenciado (solo para mensajes del otro usuario)
+            if (!isCurrentUser && shouldFilterMessage(message.senderId)) {
+                // No mostrar mensajes del usuario silenciado
+                return;
+            }
+            
             const messageElement = createRealtimeMessageElement(message, isCurrentUser);
             messagesContainer.appendChild(messageElement);
         });
@@ -4448,6 +4496,230 @@ function closeFullScreenMessage() {
         // Restaurar pantalla anterior
         switchScreen(currentScreen);
     }
+}
+
+// Funciones para el sistema de deslizado de chats
+function handleTouchStart(e) {
+    if (currentSwipeItem && currentSwipeItem !== e.currentTarget.parentNode) {
+        resetSwipe();
+    }
+    
+    swipeStartX = e.touches[0].clientX;
+    swipeStartY = e.touches[0].clientY;
+    currentSwipeItem = e.currentTarget.parentNode;
+    isSwipeActive = false;
+}
+
+function handleTouchMove(e) {
+    if (!currentSwipeItem) return;
+    
+    const currentX = e.touches[0].clientX;
+    const currentY = e.touches[0].clientY;
+    const diffX = swipeStartX - currentX;
+    const diffY = Math.abs(swipeStartY - currentY);
+    
+    // Solo activar deslizado horizontal si el movimiento es más horizontal que vertical
+    if (Math.abs(diffX) > diffY && Math.abs(diffX) > 10) {
+        e.preventDefault();
+        isSwipeActive = true;
+        
+        // Limitar el deslizado hacia la izquierda únicamente
+        if (diffX > 0 && diffX <= 150) {
+            const chatItem = currentSwipeItem.querySelector('.chat-item');
+            const swipeActions = currentSwipeItem.querySelector('.swipe-actions');
+            
+            chatItem.style.transform = `translateX(-${diffX}px)`;
+            swipeActions.style.opacity = diffX / 150;
+            swipeActions.style.transform = `translateX(${150 - diffX}px)`;
+        }
+    }
+}
+
+function handleTouchEnd(e) {
+    if (!currentSwipeItem || !isSwipeActive) {
+        isSwipeActive = false;
+        return;
+    }
+    
+    const diffX = swipeStartX - e.changedTouches[0].clientX;
+    const chatItem = currentSwipeItem.querySelector('.chat-item');
+    const swipeActions = currentSwipeItem.querySelector('.swipe-actions');
+    
+    if (diffX > 75) {
+        // Mostrar acciones
+        chatItem.style.transform = 'translateX(-150px)';
+        swipeActions.style.opacity = '1';
+        swipeActions.style.transform = 'translateX(0)';
+        currentSwipeItem.classList.add('swiped');
+    } else {
+        // Volver a la posición original
+        resetSwipe();
+    }
+    
+    isSwipeActive = false;
+}
+
+// Eventos para desktop (mouse)
+function handleMouseDown(e) {
+    if (currentSwipeItem && currentSwipeItem !== e.currentTarget.parentNode) {
+        resetSwipe();
+    }
+    
+    swipeStartX = e.clientX;
+    swipeStartY = e.clientY;
+    currentSwipeItem = e.currentTarget.parentNode;
+    isSwipeActive = false;
+    
+    document.addEventListener('mousemove', handleMouseMove);
+    document.addEventListener('mouseup', handleMouseUp);
+}
+
+function handleMouseMove(e) {
+    if (!currentSwipeItem) return;
+    
+    const diffX = swipeStartX - e.clientX;
+    const diffY = Math.abs(swipeStartY - e.clientY);
+    
+    if (Math.abs(diffX) > diffY && Math.abs(diffX) > 10) {
+        e.preventDefault();
+        isSwipeActive = true;
+        
+        if (diffX > 0 && diffX <= 150) {
+            const chatItem = currentSwipeItem.querySelector('.chat-item');
+            const swipeActions = currentSwipeItem.querySelector('.swipe-actions');
+            
+            chatItem.style.transform = `translateX(-${diffX}px)`;
+            swipeActions.style.opacity = diffX / 150;
+            swipeActions.style.transform = `translateX(${150 - diffX}px)`;
+        }
+    }
+}
+
+function handleMouseUp(e) {
+    if (!currentSwipeItem || !isSwipeActive) {
+        document.removeEventListener('mousemove', handleMouseMove);
+        document.removeEventListener('mouseup', handleMouseUp);
+        isSwipeActive = false;
+        return;
+    }
+    
+    const diffX = swipeStartX - e.clientX;
+    const chatItem = currentSwipeItem.querySelector('.chat-item');
+    const swipeActions = currentSwipeItem.querySelector('.swipe-actions');
+    
+    if (diffX > 75) {
+        chatItem.style.transform = 'translateX(-150px)';
+        swipeActions.style.opacity = '1';
+        swipeActions.style.transform = 'translateX(0)';
+        currentSwipeItem.classList.add('swiped');
+    } else {
+        resetSwipe();
+    }
+    
+    document.removeEventListener('mousemove', handleMouseMove);
+    document.removeEventListener('mouseup', handleMouseUp);
+    isSwipeActive = false;
+}
+
+function resetSwipe() {
+    if (currentSwipeItem) {
+        const chatItem = currentSwipeItem.querySelector('.chat-item');
+        const swipeActions = currentSwipeItem.querySelector('.swipe-actions');
+        
+        chatItem.style.transform = 'translateX(0)';
+        swipeActions.style.opacity = '0';
+        swipeActions.style.transform = 'translateX(150px)';
+        currentSwipeItem.classList.remove('swiped');
+    }
+    currentSwipeItem = null;
+}
+
+// Cerrar deslizado al hacer clic fuera
+document.addEventListener('click', function(e) {
+    if (currentSwipeItem && !currentSwipeItem.contains(e.target)) {
+        resetSwipe();
+    }
+});
+
+// Funciones para silenciar y eliminar chats
+function toggleMuteChat(userId, displayName) {
+    const muteEndTime = Date.now() + (20 * 60 * 1000); // 20 minutos
+    
+    if (isChatMuted(userId)) {
+        // Desactivar silencio
+        mutedChats.delete(userId);
+        showInstantNotification(`🔔 Chat con ${displayName} reactivado`, 'friend-request');
+    } else {
+        // Activar silencio por 20 minutos
+        mutedChats.set(userId, muteEndTime);
+        showInstantNotification(`🔇 Chat con ${displayName} silenciado por 20 minutos`, 'friend-request');
+        
+        // Programar la reactivación automática
+        setTimeout(() => {
+            if (mutedChats.has(userId)) {
+                mutedChats.delete(userId);
+                showInstantNotification(`🔔 Chat con ${displayName} reactivado automáticamente`, 'friend-request');
+                // Actualizar UI
+                loadUserContacts();
+            }
+        }, 20 * 60 * 1000);
+    }
+    
+    // Actualizar la interfaz
+    loadUserContacts();
+    resetSwipe();
+}
+
+function deleteChat(userId, displayName) {
+    const confirmDelete = confirm(`¿Estás seguro de que quieres eliminar la conversación con ${displayName}?`);
+    
+    if (confirmDelete) {
+        // Eliminar el chat de Firebase
+        const chatId = generateChatId(currentUser.uid, userId);
+        
+        database.ref(`chats/${chatId}`).remove()
+            .then(() => {
+                console.log('Chat eliminado de Firebase');
+                
+                // Eliminar contacto de la lista local
+                chatContacts = chatContacts.filter(contact => contact.uid !== userId);
+                
+                // Eliminar silencio si existe
+                if (mutedChats.has(userId)) {
+                    mutedChats.delete(userId);
+                }
+                
+                // Actualizar interfaz
+                loadUserContacts();
+                
+                showInstantNotification(`🗑️ Conversación con ${displayName} eliminada`, 'friend-request');
+            })
+            .catch(error => {
+                console.error('Error eliminando chat:', error);
+                showErrorMessage('Error eliminando conversación. Intenta de nuevo.');
+            });
+    }
+    
+    resetSwipe();
+}
+
+function isChatMuted(userId) {
+    if (mutedChats.has(userId)) {
+        const muteEndTime = mutedChats.get(userId);
+        if (Date.now() < muteEndTime) {
+            return true;
+        } else {
+            // El silencio ha expirado, eliminarlo
+            mutedChats.delete(userId);
+            return false;
+        }
+    }
+    return false;
+}
+
+// Función para verificar si un mensaje debe ser filtrado por silencio
+function shouldFilterMessage(senderId) {
+    return isChatMuted(senderId);
 }
 
 function showAutoGeneratedCodeMessage(code) {
