@@ -2693,68 +2693,71 @@ function sendFriendRequest(targetUserId, targetUserPhone) {
         fromAvatar: currentUser.avatar || `https://api.dicebear.com/7.x/avataaars/svg?seed=${currentUser.phoneNumber}`,
         to: targetUserId,
         toPhone: targetUserPhone,
-        timestamp: Date.now(), // Usar timestamp directo para mejor compatibilidad
+        timestamp: Date.now(),
         status: 'pending'
     };
 
     // Cerrar tarjeta de usuario
     closeUserFoundCard();
 
-    console.log('Enviando solicitud de amistad:', requestData);
+    console.log('📤 Enviando solicitud de amistad:', requestData);
 
-    // Enviar solicitud y notificaciones en paralelo
-    const promises = [];
+    // Mostrar loading
+    showInstantNotification('📤 Enviando solicitud...', 'friend-request');
 
-    // 1. Guardar solicitud principal
-    promises.push(database.ref(`friendRequests/${targetUserId}/${requestId}`).set(requestData));
-
-    // 2. Crear notificación directa
-    const notificationData = {
-        type: 'friend_request',
-        from: currentUser.uid,
-        fromPhone: currentUser.phoneNumber,
-        fromAvatar: currentUser.avatar || `https://api.dicebear.com/7.x/avataaars/svg?seed=${currentUser.phoneNumber}`,
-        requestId: requestId,
-        timestamp: Date.now(),
-        read: false
-    };
-    promises.push(database.ref(`notifications/${targetUserId}`).push(notificationData));
-
-    // 3. Actualizar flag de notificación en perfil del usuario
-    promises.push(database.ref(`users/${targetUserId}/lastNotification`).set({
-        type: 'friend_request',
-        from: currentUser.phoneNumber,
-        timestamp: Date.now(),
-        requestId: requestId
-    }));
-
-    // 4. Crear entrada en solicitudes pendientes globales
-    promises.push(database.ref(`globalNotifications/${targetUserId}_${requestId}`).set({
-        type: 'friend_request',
-        targetUser: targetUserId,
-        fromUser: currentUser.uid,
-        fromPhone: currentUser.phoneNumber,
-        requestId: requestId,
-        timestamp: Date.now(),
-        processed: false
-    }));
-
-    Promise.all(promises)
+    // Enviar solicitud principal PRIMERO
+    database.ref(`friendRequests/${targetUserId}/${requestId}`).set(requestData)
         .then(() => {
-            console.log('Solicitud y notificaciones enviadas exitosamente a Firebase');
-            showInstantNotification(`✅ Solicitud enviada a ${targetUserPhone}`, 'friend-request');
+            console.log('✅ Solicitud principal guardada en Firebase');
             
-            // Forzar actualización inmediata en el destinatario si está online
-            database.ref(`users/${targetUserId}/status`).once('value').then(statusSnapshot => {
-                if (statusSnapshot.val() === 'online') {
-                    console.log('Usuario destinatario está online, notificación debería llegar inmediatamente');
-                }
+            // Crear notificación directa inmediatamente
+            const notificationData = {
+                type: 'friend_request',
+                from: currentUser.uid,
+                fromPhone: currentUser.phoneNumber,
+                fromAvatar: currentUser.avatar || `https://api.dicebear.com/7.x/avataaars/svg?seed=${currentUser.phoneNumber}`,
+                requestId: requestId,
+                timestamp: Date.now(),
+                read: false
+            };
+            
+            return database.ref(`notifications/${targetUserId}`).push(notificationData);
+        })
+        .then(() => {
+            console.log('✅ Notificación directa enviada');
+            
+            // Actualizar flag inmediato para trigger de listener
+            return database.ref(`users/${targetUserId}/pendingFriendRequest`).set({
+                type: 'friend_request',
+                from: currentUser.phoneNumber,
+                fromUser: currentUser.uid,
+                timestamp: Date.now(),
+                requestId: requestId,
+                urgent: true
             });
+        })
+        .then(() => {
+            console.log('✅ Flag de notificación urgente activado');
+            
+            // Verificar estado del usuario destinatario
+            return database.ref(`users/${targetUserId}/status`).once('value');
+        })
+        .then((statusSnapshot) => {
+            const userStatus = statusSnapshot.val();
+            console.log(`📊 Estado del usuario destinatario: ${userStatus}`);
+            
+            if (userStatus === 'online') {
+                console.log('🟢 Usuario destinatario está ONLINE - debería recibir inmediatamente');
+                showInstantNotification(`✅ Solicitud enviada a ${targetUserPhone} (usuario en línea)`, 'friend-request');
+            } else {
+                console.log('🔴 Usuario destinatario está OFFLINE - recibirá al conectarse');
+                showInstantNotification(`✅ Solicitud enviada a ${targetUserPhone} (recibirá al conectarse)`, 'friend-request');
+            }
             
         })
         .catch(error => {
-            console.error('Error enviando solicitud completa:', error);
-            showErrorMessage('Error enviando solicitud. Intenta de nuevo.');
+            console.error('❌ Error enviando solicitud:', error);
+            showErrorMessage(`Error enviando solicitud: ${error.message}`);
         });
 }
 
@@ -3257,19 +3260,21 @@ function setupFriendRequestsListener() {
             console.log('Nueva solicitud detectada en tiempo real:', request);
             
             if (request && request.status === 'pending') {
-                // Verificar que no sea una solicitud antigua
+                // Verificar que no sea una solicitud antigua (últimos 10 minutos)
                 const requestTime = request.timestamp;
                 const now = Date.now();
-                const oneHourAgo = now - (60 * 60 * 1000);
+                const tenMinutesAgo = now - (10 * 60 * 1000);
                 
-                if (requestTime > oneHourAgo || typeof requestTime === 'object') {
+                if (requestTime > tenMinutesAgo || typeof requestTime === 'object') {
+                    console.log('✅ Mostrando solicitud válida:', request);
+                    
                     // Mostrar notificación instantánea
                     showInstantNotification(`📱 Nueva solicitud de ${request.fromPhone}`, 'friend-request');
                     
-                    // Mostrar modal después de un breve delay
-                    setTimeout(() => {
-                        showFriendRequestModal(request, requestId);
-                    }, 1500);
+                    // Mostrar modal inmediatamente
+                    showFriendRequestModal(request, requestId);
+                } else {
+                    console.log('❌ Solicitud demasiado antigua, ignorando');
                 }
             }
         });
@@ -3281,7 +3286,11 @@ function setupFriendRequestsListener() {
             console.log('Solicitud actualizada:', request);
             
             if (request && request.status === 'accepted') {
-                console.log('Solicitud aceptada detectada:', requestId);
+                console.log('✅ Solicitud aceptada detectada:', requestId);
+                showInstantNotification('✅ Tu solicitud fue aceptada', 'friend-request');
+            } else if (request && request.status === 'rejected') {
+                console.log('❌ Solicitud rechazada detectada:', requestId);
+                showInstantNotification('❌ Tu solicitud fue rechazada', 'friend-request');
             }
         });
 
@@ -3290,14 +3299,15 @@ function setupFriendRequestsListener() {
             console.error('Error en listener de solicitudes:', error);
             // Reintentar configurar listener después de 5 segundos
             setTimeout(() => {
+                console.log('Reintentando configurar listener...');
                 setupFriendRequestsListener();
             }, 5000);
         });
 
-        console.log('Listener de solicitudes configurado correctamente para:', currentUser.uid);
+        console.log('✅ Listener de solicitudes configurado correctamente para:', currentUser.uid);
         
     } catch (error) {
-        console.error('Error configurando listener de solicitudes:', error);
+        console.error('❌ Error configurando listener de solicitudes:', error);
     }
 }
 
@@ -3586,7 +3596,10 @@ function sendMessage() {
     const messageInput = document.getElementById('message-input');
     const messageText = messageInput.value.trim();
 
-    if (!messageText || !currentChatContact) return;
+    if (!messageText || !currentChatContact) {
+        console.log('❌ No se puede enviar: mensaje vacío o sin contacto');
+        return;
+    }
 
     // Detectar lenguaje ofensivo antes de enviar
     const moderationResult = checkOffensiveContent(messageText);
@@ -3599,6 +3612,9 @@ function sendMessage() {
 
     // Crear ID del chat
     const chatId = generateChatId(currentUser.uid, currentChatContact.uid);
+    console.log(`📤 Enviando mensaje en chat: ${chatId}`);
+    console.log(`👤 De: ${currentUser.uid} Para: ${currentChatContact.uid}`);
+    console.log(`💬 Mensaje: "${messageText}"`);
 
     // Crear objeto del mensaje
     const messageData = {
@@ -3606,30 +3622,67 @@ function sendMessage() {
         text: messageText,
         senderId: currentUser.uid,
         receiverId: currentChatContact.uid,
-        timestamp: firebase.database.ServerValue.TIMESTAMP,
-        status: 'sent'
+        timestamp: Date.now(), // Usar timestamp directo para mejor debugging
+        status: 'sent',
+        type: 'text'
     };
+
+    // Limpiar input inmediatamente para mejor UX
+    messageInput.value = '';
 
     // Enviar mensaje a Firebase
     database.ref(`chats/${chatId}/messages`).push(messageData)
         .then(() => {
-            console.log('Mensaje enviado exitosamente');
+            console.log('✅ Mensaje enviado exitosamente a Firebase');
             playMessageSound();
 
             // Actualizar último mensaje del chat
-            database.ref(`chats/${chatId}/lastMessage`).set({
+            return database.ref(`chats/${chatId}/lastMessage`).set({
                 text: messageText,
-                timestamp: firebase.database.ServerValue.TIMESTAMP,
+                timestamp: Date.now(),
                 senderId: currentUser.uid
             });
         })
+        .then(() => {
+            console.log('✅ Último mensaje actualizado');
+            
+            // Notificar al receptor si está online
+            return database.ref(`users/${currentChatContact.uid}/status`).once('value');
+        })
+        .then((statusSnapshot) => {
+            const receiverStatus = statusSnapshot.val();
+            console.log(`📊 Estado del receptor: ${receiverStatus}`);
+            
+            if (receiverStatus === 'online') {
+                console.log('🟢 Receptor está online - mensaje debería llegar inmediatamente');
+                
+                // Crear notificación de mensaje para el receptor
+                const messageNotification = {
+                    type: 'new_message',
+                    from: currentUser.uid,
+                    fromPhone: currentUser.phoneNumber,
+                    chatId: chatId,
+                    messagePreview: messageText.substring(0, 50),
+                    timestamp: Date.now(),
+                    read: false
+                };
+                
+                return database.ref(`notifications/${currentChatContact.uid}`).push(messageNotification);
+            } else {
+                console.log('🔴 Receptor está offline - recibirá el mensaje al conectarse');
+                return Promise.resolve();
+            }
+        })
+        .then(() => {
+            console.log('✅ Proceso de envío completado');
+        })
         .catch(error => {
-            console.error('Error enviando mensaje:', error);
-            showErrorMessage('Error enviando mensaje. Intenta de nuevo.');
+            console.error('❌ Error enviando mensaje:', error);
+            showErrorMessage(`Error enviando mensaje: ${error.message}`);
+            
+            // Restaurar mensaje en input si hay error
+            messageInput.value = messageText;
         });
-
-    // Limpiar input
-    messageInput.value = '';
 }
 
 function createMessageElement(text, isSent, translatedText = null) {
