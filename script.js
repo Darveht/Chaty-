@@ -10,11 +10,11 @@ const firebaseConfig = {
     measurementId: "G-P29ME5Z3S1"
 };
 
-// Dropbox Configuration
-const DROPBOX_CONFIG = {
-    appKey: 'v5dfnl6faz90grp',
-    appSecret: 's4xnqyfad3jl9y9',
-    accessToken: null // Se obtendrá dinámicamente
+// Firebase Storage Configuration para base64
+const FIREBASE_STORAGE = {
+    maxImageSize: 5 * 1024 * 1024, // 5MB máximo
+    compressionQuality: 0.8, // 80% calidad
+    maxDimensions: { width: 1920, height: 1080 }
 };
 
 // Initialize Firebase
@@ -1350,18 +1350,18 @@ function handleAvatarChange(event) {
         preview.style.opacity = '0.5';
         profileAvatar.style.opacity = '0.5';
         
-        // Subir a Dropbox
-        uploadToDropbox(file, 'image')
-            .then(imageUrl => {
-                preview.src = imageUrl;
-                profileAvatar.src = imageUrl;
+        // Subir a Firebase
+        uploadToFirebase(file, 'image')
+            .then(imageBase64 => {
+                preview.src = imageBase64;
+                profileAvatar.src = imageBase64;
                 preview.style.opacity = '1';
                 profileAvatar.style.opacity = '1';
                 
                 // Guardar en Firebase inmediatamente
                 if (currentUser) {
-                    currentUser.avatar = imageUrl;
-                    database.ref(`users/${currentUser.uid}/avatar`).set(imageUrl);
+                    currentUser.avatar = imageBase64;
+                    database.ref(`users/${currentUser.uid}/avatar`).set(imageBase64);
                 }
                 
                 showSuccessMessage('📸 Foto de perfil actualizada');
@@ -1370,363 +1370,94 @@ function handleAvatarChange(event) {
                 console.error('Error subiendo imagen:', error);
                 preview.style.opacity = '1';
                 profileAvatar.style.opacity = '1';
-                showErrorMessage('Error subiendo imagen. Intenta de nuevo.');
+                showErrorMessage(`Error subiendo imagen: ${error.message}`);
             });
     }
 }
 
-// Función para obtener token de acceso de Dropbox
-async function getDropboxAccessToken() {
-    // Verificar si ya tenemos un token guardado y válido
-    const savedToken = localStorage.getItem('dropbox_access_token');
-    const tokenExpiry = localStorage.getItem('dropbox_token_expiry');
-    
-    if (savedToken && tokenExpiry && Date.now() < parseInt(tokenExpiry)) {
-        DROPBOX_CONFIG.accessToken = savedToken;
-        return savedToken;
-    }
-    
-    try {
-        // Verificar si tenemos un código de autorización en la URL actual
-        const urlParams = new URLSearchParams(window.location.search);
-        const authCode = urlParams.get('code');
+// Función para comprimir imagen antes de convertir a base64
+function compressImage(file) {
+    return new Promise((resolve, reject) => {
+        const canvas = document.createElement('canvas');
+        const ctx = canvas.getContext('2d');
+        const img = new Image();
         
-        if (authCode) {
-            // Recuperar code_verifier del localStorage
-            const codeVerifier = localStorage.getItem('dropbox_code_verifier');
-            if (!codeVerifier) {
-                throw new Error('Code verifier no encontrado');
+        img.onload = function() {
+            // Calcular nuevas dimensiones manteniendo proporción
+            let { width, height } = img;
+            const maxWidth = FIREBASE_STORAGE.maxDimensions.width;
+            const maxHeight = FIREBASE_STORAGE.maxDimensions.height;
+            
+            if (width > maxWidth || height > maxHeight) {
+                const ratio = Math.min(maxWidth / width, maxHeight / height);
+                width = width * ratio;
+                height = height * ratio;
             }
             
-            // Obtener la URL base sin parámetros
-            const redirectUri = window.location.origin + window.location.pathname;
+            canvas.width = width;
+            canvas.height = height;
             
-            // Intercambiar código por token
-            const tokenData = await exchangeCodeForToken(authCode, codeVerifier, redirectUri);
+            // Dibujar imagen redimensionada
+            ctx.drawImage(img, 0, 0, width, height);
             
-            DROPBOX_CONFIG.accessToken = tokenData.access_token;
-            localStorage.setItem('dropbox_access_token', tokenData.access_token);
-            
-            // Calcular tiempo de expiración (por defecto 4 horas si no se especifica)
-            const expiresIn = tokenData.expires_in || 14400; // 4 horas por defecto
-            const expiryTime = Date.now() + (expiresIn * 1000);
-            localStorage.setItem('dropbox_token_expiry', expiryTime.toString());
-            
-            // Limpiar parámetros de la URL
-            window.history.replaceState({}, document.title, window.location.pathname);
-            
-            return tokenData.access_token;
-        } else {
-            // Iniciar flujo OAuth
-            await initiateDropboxOAuth();
-            throw new Error('Autorización de Dropbox requerida');
-        }
-    } catch (error) {
-        console.error('Error obteniendo token de Dropbox:', error);
-        // Limpiar tokens inválidos
-        localStorage.removeItem('dropbox_access_token');
-        localStorage.removeItem('dropbox_token_expiry');
-        localStorage.removeItem('dropbox_code_verifier');
-        throw new Error('No se pudo obtener autorización de Dropbox');
-    }
+            // Convertir a base64 con compresión
+            const base64 = canvas.toDataURL('image/jpeg', FIREBASE_STORAGE.compressionQuality);
+            resolve(base64);
+        };
+        
+        img.onerror = () => reject(new Error('Error cargando imagen'));
+        img.src = URL.createObjectURL(file);
+    });
 }
 
-// Función para iniciar el flujo OAuth de Dropbox
-async function initiateDropboxOAuth() {
-    try {
-        // Generar code verifier y challenge para PKCE
-        const codeVerifier = generateCodeVerifier();
-        const codeChallenge = await generateCodeChallenge(codeVerifier);
-        
-        // Guardar code_verifier para uso posterior
-        localStorage.setItem('dropbox_code_verifier', codeVerifier);
-        
-        // Usar la URL actual como redirect_uri
-        const redirectUri = window.location.origin + window.location.pathname;
-        
-        // Crear URL de autorización
-        const authUrl = `https://www.dropbox.com/oauth2/authorize?` +
-            `client_id=${DROPBOX_CONFIG.appKey}&` +
-            `response_type=code&` +
-            `code_challenge=${codeChallenge}&` +
-            `code_challenge_method=S256&` +
-            `redirect_uri=${encodeURIComponent(redirectUri)}&` +
-            `token_access_type=offline`;
-        
-        // Mostrar modal de autorización
-        showDropboxAuthModal(authUrl);
-        
-    } catch (error) {
-        console.error('Error iniciando OAuth de Dropbox:', error);
-        throw error;
-    }
-}
-
-// Generar code verifier para PKCE
-function generateCodeVerifier() {
-    const array = new Uint8Array(32);
-    crypto.getRandomValues(array);
-    return btoa(String.fromCharCode.apply(null, array))
-        .replace(/\+/g, '-')
-        .replace(/\//g, '_')
-        .replace(/=/g, '');
-}
-
-// Generar code challenge para PKCE
-async function generateCodeChallenge(verifier) {
-    const encoder = new TextEncoder();
-    const data = encoder.encode(verifier);
-    const digest = await crypto.subtle.digest('SHA-256', data);
-    return btoa(String.fromCharCode.apply(null, new Uint8Array(digest)))
-        .replace(/\+/g, '-')
-        .replace(/\//g, '_')
-        .replace(/=/g, '');
-}
-
-// Intercambiar código de autorización por token de acceso
-async function exchangeCodeForToken(authCode, codeVerifier, redirectUri) {
-    try {
-        console.log('Intercambiando código por token...');
-        
-        const tokenRequestBody = new URLSearchParams({
-            code: authCode,
-            grant_type: 'authorization_code',
-            client_id: DROPBOX_CONFIG.appKey,
-            code_verifier: codeVerifier,
-            redirect_uri: redirectUri
-        });
-
-        const response = await fetch('https://api.dropboxapi.com/oauth2/token', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/x-www-form-urlencoded',
-            },
-            body: tokenRequestBody
-        });
-
-        if (!response.ok) {
-            const errorText = await response.text();
-            console.error('Error respuesta token:', errorText);
-            throw new Error(`Error HTTP ${response.status}: ${errorText}`);
-        }
-
-        const tokenData = await response.json();
-        console.log('Token obtenido exitosamente');
-        
-        return tokenData;
-    } catch (error) {
-        console.error('Error intercambiando código por token:', error);
-        throw error;
-    }
-}
-
-// Mostrar modal de autorización de Dropbox
-function showDropboxAuthModal(authUrl) {
-    const modal = document.createElement('div');
-    modal.className = 'dropbox-auth-modal';
-    modal.innerHTML = `
-        <div class="dropbox-auth-content">
-            <div class="auth-header">
-                <div class="auth-icon">
-                    <i class="fab fa-dropbox"></i>
-                </div>
-                <h2>Conectar con Dropbox</h2>
-                <p>Para subir y compartir imágenes, necesitas conectar tu cuenta de Dropbox</p>
-                <div class="auth-benefits">
-                    <div class="benefit-item">
-                        <i class="fas fa-cloud-upload-alt"></i>
-                        <span>Subida rápida y segura</span>
-                    </div>
-                    <div class="benefit-item">
-                        <i class="fas fa-share-alt"></i>
-                        <span>Compartir imágenes fácilmente</span>
-                    </div>
-                    <div class="benefit-item">
-                        <i class="fas fa-shield-alt"></i>
-                        <span>Almacenamiento confiable</span>
-                    </div>
-                </div>
-            </div>
-            <div class="auth-actions">
-                <button class="secondary-btn" onclick="closeDropboxAuthModal()">
-                    <i class="fas fa-times"></i>
-                    Ahora no
-                </button>
-                <button class="primary-btn" onclick="authorizeDropbox('${authUrl}')">
-                    <i class="fab fa-dropbox"></i>
-                    Conectar Dropbox
-                </button>
-            </div>
-            <div class="auth-note">
-                <small><i class="fas fa-info-circle"></i> Se abrirá una nueva ventana para autorizar el acceso</small>
-            </div>
-        </div>
-    `;
+// Función para subir imagen a Firebase como base64
+async function uploadToFirebase(file, resourceType = 'image') {
+    console.log('Subiendo imagen a Firebase:', file.name, file.size);
     
-    document.body.appendChild(modal);
-    window.currentDropboxAuthModal = modal;
-}
-
-function closeDropboxAuthModal() {
-    if (window.currentDropboxAuthModal) {
-        document.body.removeChild(window.currentDropboxAuthModal);
-        window.currentDropboxAuthModal = null;
+    // Verificar tamaño del archivo
+    if (file.size > FIREBASE_STORAGE.maxImageSize) {
+        throw new Error(`El archivo es demasiado grande. Máximo ${FIREBASE_STORAGE.maxImageSize / (1024 * 1024)}MB.`);
     }
-}
-
-function authorizeDropbox(authUrl) {
-    window.location.href = authUrl;
-}
-
-// Función para subir archivos a Dropbox
-async function uploadToDropbox(file, resourceType = 'image') {
-    console.log('Iniciando subida a Dropbox:', file.name, file.size);
     
-    // Verificar tamaño del archivo (máximo 150MB para Dropbox)
-    if (file.size > 150 * 1024 * 1024) {
-        throw new Error('El archivo es demasiado grande. Máximo 150MB.');
+    // Verificar que sea una imagen
+    if (!file.type.startsWith('image/')) {
+        throw new Error('Solo se permiten archivos de imagen.');
     }
     
     try {
-        // Obtener token de acceso con reintento
-        let accessToken;
-        try {
-            accessToken = await getDropboxAccessToken();
-        } catch (authError) {
-            console.error('Error de autorización:', authError);
-            throw new Error('Autorización de Dropbox requerida. Por favor, autoriza la aplicación.');
-        }
+        // Comprimir imagen
+        console.log('Comprimiendo imagen...');
+        const compressedBase64 = await compressImage(file);
         
-        // Generar nombre único para el archivo
-        const timestamp = Date.now();
-        const extension = file.name.split('.').pop();
-        const fileName = `uberchat/${currentUser.uid}/${timestamp}_${file.name}`;
+        // Generar ID único para la imagen
+        const imageId = Date.now().toString();
+        const imagePath = `images/${currentUser.uid}/${imageId}`;
         
-        console.log('Subiendo archivo a Dropbox:', fileName);
+        // Crear objeto de imagen para Firebase
+        const imageData = {
+            id: imageId,
+            base64: compressedBase64,
+            fileName: file.name,
+            fileSize: file.size,
+            mimeType: file.type,
+            uploadedBy: currentUser.uid,
+            uploadedAt: Date.now(),
+            compressed: true
+        };
         
-        // Subir archivo a Dropbox
-        const uploadResponse = await fetch('https://content.dropboxapi.com/2/files/upload', {
-            method: 'POST',
-            headers: {
-                'Authorization': `Bearer ${accessToken}`,
-                'Content-Type': 'application/octet-stream',
-                'Dropbox-API-Arg': JSON.stringify({
-                    path: `/${fileName}`,
-                    mode: 'add',
-                    autorename: true,
-                    mute: false
-                })
-            },
-            body: file
-        });
+        console.log('Guardando imagen en Firebase...');
         
-        if (!uploadResponse.ok) {
-            const errorText = await uploadResponse.text();
-            console.error('Error respuesta Dropbox upload:', errorText);
-            
-            // Si el token es inválido, limpiar y solicitar nueva autorización
-            if (uploadResponse.status === 401) {
-                localStorage.removeItem('dropbox_access_token');
-                DROPBOX_CONFIG.accessToken = null;
-                throw new Error('Token de Dropbox expirado. Por favor, autoriza nuevamente la aplicación.');
-            }
-            
-            throw new Error(`Error HTTP ${uploadResponse.status}: ${errorText}`);
-        }
+        // Guardar en Firebase Realtime Database
+        await database.ref(imagePath).set(imageData);
         
-        const uploadData = await uploadResponse.json();
-        console.log('Archivo subido a Dropbox:', uploadData);
+        console.log('Imagen subida exitosamente a Firebase:', imageId);
         
-        // Crear enlace compartido público
-        const shareResponse = await fetch('https://api.dropboxapi.com/2/sharing/create_shared_link_with_settings', {
-            method: 'POST',
-            headers: {
-                'Authorization': `Bearer ${accessToken}`,
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({
-                path: uploadData.path_lower,
-                settings: {
-                    audience: 'public',
-                    access: 'viewer',
-                    requested_visibility: 'public',
-                    allow_download: true
-                }
-            })
-        });
-        
-        if (!shareResponse.ok) {
-            const errorText = await shareResponse.text();
-            console.error('Error creando enlace compartido:', errorText);
-            
-            // Si falla el enlace compartido, usar enlace temporal
-            if (shareResponse.status === 409) {
-                // El enlace ya existe, intentar obtenerlo
-                try {
-                    const existingLinks = await getExistingSharedLinks(accessToken, uploadData.path_lower);
-                    if (existingLinks && existingLinks.length > 0) {
-                        const directUrl = existingLinks[0].url.replace('?dl=0', '?raw=1');
-                        console.log('Usando enlace compartido existente:', directUrl);
-                        return directUrl;
-                    }
-                } catch (linkError) {
-                    console.error('Error obteniendo enlaces existentes:', linkError);
-                }
-            }
-            
-            throw new Error(`Error creando enlace público: ${shareResponse.status}`);
-        }
-        
-        const shareData = await shareResponse.json();
-        console.log('Enlace compartido creado:', shareData);
-        
-        // Convertir URL de Dropbox a URL directa de imagen
-        const directUrl = shareData.url.replace('?dl=0', '?raw=1');
-        
-        console.log('Imagen subida exitosamente a Dropbox:', directUrl);
-        return directUrl;
+        // Retornar la URL de la imagen (base64 directamente)
+        return compressedBase64;
         
     } catch (error) {
-        console.error('Error detallado subiendo a Dropbox:', error);
-        
-        // Mensajes de error más específicos
-        if (error.message.includes('401')) {
-            throw new Error('Token de Dropbox inválido o expirado. Por favor, autoriza la aplicación nuevamente.');
-        } else if (error.message.includes('403')) {
-            throw new Error('Permisos insuficientes en Dropbox. Verifica la configuración de la aplicación.');
-        } else if (error.message.includes('429')) {
-            throw new Error('Límite de velocidad de Dropbox alcanzado. Intenta de nuevo en unos minutos.');
-        } else if (error.message.includes('507')) {
-            throw new Error('Almacenamiento de Dropbox lleno. Libera espacio e intenta de nuevo.');
-        }
-        
-        throw new Error(`Error subiendo imagen a Dropbox: ${error.message}`);
-    }
-}
-
-// Función para obtener enlaces compartidos existentes
-async function getExistingSharedLinks(accessToken, path) {
-    try {
-        const response = await fetch('https://api.dropboxapi.com/2/sharing/list_shared_links', {
-            method: 'POST',
-            headers: {
-                'Authorization': `Bearer ${accessToken}`,
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({
-                path: path,
-                direct_only: true
-            })
-        });
-        
-        if (response.ok) {
-            const data = await response.json();
-            return data.links;
-        }
-        return null;
-    } catch (error) {
-        console.error('Error obteniendo enlaces existentes:', error);
-        return null;
+        console.error('Error subiendo imagen a Firebase:', error);
+        throw new Error(`Error subiendo imagen: ${error.message}`);
     }
 }
 
@@ -2409,10 +2140,29 @@ function createRealtimeMessageElement(message, isSent) {
     const timeString = date.getHours().toString().padStart(2, '0') + ':' + 
                       date.getMinutes().toString().padStart(2, '0');
 
+    let contentHTML = '';
+    
+    if (message.type === 'image') {
+        // Manejar mensaje de imagen con base64
+        const imageSource = message.imageBase64 || message.imageUrl || '';
+        contentHTML = `
+            <div class="message-content">
+                <div class="message-image">
+                    <img src="${imageSource}" alt="Imagen" onclick="expandImage(this)" onload="console.log('Imagen cargada desde Firebase')">
+                </div>
+            </div>
+        `;
+    } else {
+        // Mensaje de texto normal
+        contentHTML = `
+            <div class="message-content">
+                <div class="original-text">${message.text}</div>
+            </div>
+        `;
+    }
+
     messageDiv.innerHTML = `
-        <div class="message-content">
-            <div class="original-text">${message.text}</div>
-        </div>
+        ${contentHTML}
         <div class="message-time">${timeString}</div>
     `;
 
@@ -2752,25 +2502,26 @@ function sendImageMessage(file) {
     const loadingElement = messageElement.querySelector('.image-loading');
     loadingElement.innerHTML = `
         <div class="image-loading-spinner"></div>
-        <div class="upload-progress">Subiendo imagen...</div>
+        <div class="upload-progress">Procesando imagen...</div>
     `;
 
-    // Subir imagen a Dropbox
-    uploadToDropbox(file, 'image')
-        .then(imageUrl => {
-            console.log('Imagen subida, URL:', imageUrl);
+    // Subir imagen a Firebase
+    uploadToFirebase(file, 'image')
+        .then(imageBase64 => {
+            console.log('Imagen procesada y subida a Firebase');
             
             // Reemplazar elemento de carga con imagen real
-            loadingElement.outerHTML = `<img src="${imageUrl}" alt="Imagen enviada" onclick="expandImage(this)" onload="console.log('Imagen cargada en chat')">`;
+            loadingElement.outerHTML = `<img src="${imageBase64}" alt="Imagen enviada" onclick="expandImage(this)" onload="console.log('Imagen cargada en chat')">`;
             
             // Crear mensaje en Firebase
             const messageData = {
                 id: Date.now().toString(),
                 type: 'image',
-                imageUrl: imageUrl,
+                imageBase64: imageBase64,
+                fileName: file.name,
                 senderId: currentUser.uid,
                 receiverId: currentChatContact.uid,
-                timestamp: Date.now(), // Usar timestamp directo
+                timestamp: Date.now(),
                 status: 'sent'
             };
 
@@ -2796,7 +2547,7 @@ function sendImageMessage(file) {
             console.error('Error completo subiendo imagen:', error);
             // Remover mensaje de carga si falla
             messageElement.remove();
-            showErrorMessage(`Error subiendo imagen: ${error.message}`);
+            showErrorMessage(`Error procesando imagen: ${error.message}`);
         });
 }
 
