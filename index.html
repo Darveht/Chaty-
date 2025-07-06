@@ -304,6 +304,10 @@
                 <i class="fas fa-language"></i>
                 <span>Traducir</span>
             </div>
+            <div class="nav-item" onclick="showSection('moments')">
+                <i class="fas fa-camera"></i>
+                <span>Momentos</span>
+            </div>
             <div class="nav-item" onclick="showSection('calls')">
                 <i class="fas fa-phone"></i>
                 <span>Llamadas</span>
@@ -691,6 +695,154 @@
         </div>
     </div>
 
+    <!-- Pantalla de Momentos -->
+    <div id="moments-screen" class="screen">
+        <div class="moments-header">
+            <h2>Momentos</h2>
+            <button class="create-moment-btn" onclick="showCreateMoment()">
+                <i class="fas fa-plus"></i>
+            </button>
+        </div>
+
+        <div class="moments-container" id="moments-container">
+            <div class="empty-moments">
+                <div class="empty-moments-icon">
+                    <i class="fas fa-camera-retro"></i>
+                </div>
+                <h3>¡Comparte tu primer momento!</h3>
+                <p>Los momentos te permiten compartir fotos e historias con tus contactos</p>
+                <button class="primary-btn" onclick="showCreateMoment()">
+                    <i class="fas fa-plus"></i>
+                    Crear Momento
+                </button>
+            </div>
+        </div>
+
+        <!-- Barra de navegación inferior -->
+        <div class="bottom-nav">
+            <div class="nav-item" onclick="showSection('chats')">
+                <i class="fas fa-comments"></i>
+                <span>Chats</span>
+            </div>
+            <div class="nav-item" onclick="showSection('translate')">
+                <i class="fas fa-language"></i>
+                <span>Traducir</span>
+            </div>
+            <div class="nav-item active" onclick="showSection('moments')">
+                <i class="fas fa-camera"></i>
+                <span>Momentos</span>
+            </div>
+            <div class="nav-item" onclick="showSection('calls')">
+                <i class="fas fa-phone"></i>
+                <span>Llamadas</span>
+            </div>
+            <div class="nav-item" onclick="showSection('settings')">
+                <i class="fas fa-cog"></i>
+                <span>Ajustes</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal para crear momento -->
+    <div id="create-moment-modal" class="modal">
+        <div class="modal-content create-moment-content">
+            <div class="modal-header">
+                <button class="close-btn" onclick="hideCreateMoment()">
+                    <i class="fas fa-arrow-left"></i>
+                </button>
+                <h3>Crear Momento</h3>
+                <button class="publish-moment-btn" onclick="publishMoment()" disabled>
+                    <i class="fas fa-send"></i>
+                    Publicar
+                </button>
+            </div>
+            
+            <div class="modal-body">
+                <div class="moment-image-upload">
+                    <div class="image-upload-area" onclick="selectMomentImage()">
+                        <div class="upload-placeholder" id="upload-placeholder">
+                            <i class="fas fa-camera"></i>
+                            <p>Toca para agregar una foto</p>
+                        </div>
+                        <img id="moment-preview" class="moment-preview" style="display: none;">
+                    </div>
+                    <input type="file" id="moment-image-input" accept="image/*" style="display: none;" onchange="handleMomentImageSelect(event)">
+                </div>
+                
+                <div class="moment-text-input">
+                    <textarea id="moment-text" placeholder="¿Qué está pasando?" maxlength="280" oninput="updateMomentText()"></textarea>
+                    <div class="character-count">
+                        <span id="moment-char-count">0</span>/280
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal para ver momento completo -->
+    <div id="view-moment-modal" class="modal view-moment-modal">
+        <div class="modal-content view-moment-content">
+            <div class="moment-view-header">
+                <button class="close-btn" onclick="hideViewMoment()">
+                    <i class="fas fa-arrow-left"></i>
+                </button>
+                <div class="moment-author-info">
+                    <img class="moment-author-avatar" id="view-moment-avatar" src="">
+                    <div class="moment-author-details">
+                        <div class="moment-author-name" id="view-moment-author"></div>
+                        <div class="moment-time" id="view-moment-time"></div>
+                    </div>
+                </div>
+                <button class="moment-options-btn">
+                    <i class="fas fa-ellipsis-v"></i>
+                </button>
+            </div>
+            
+            <div class="moment-view-body">
+                <div class="moment-image-container">
+                    <img id="view-moment-image" class="moment-full-image">
+                </div>
+                <div class="moment-text-content">
+                    <p id="view-moment-text"></p>
+                </div>
+                
+                <div class="moment-reactions">
+                    <div class="reaction-buttons">
+                        <button class="reaction-btn" onclick="reactToMoment('like')">
+                            <i class="fas fa-heart"></i>
+                            <span id="like-count">0</span>
+                        </button>
+                        <button class="reaction-btn" onclick="reactToMoment('laugh')">
+                            <i class="fas fa-laugh"></i>
+                            <span id="laugh-count">0</span>
+                        </button>
+                        <button class="reaction-btn" onclick="reactToMoment('wow')">
+                            <i class="fas fa-surprise"></i>
+                            <span id="wow-count">0</span>
+                        </button>
+                    </div>
+                </div>
+                
+                <div class="moment-comments">
+                    <div class="comments-header">
+                        <h4>Comentarios</h4>
+                        <span class="comments-count" id="comments-count">0</span>
+                    </div>
+                    <div class="comments-list" id="comments-list">
+                        <!-- Los comentarios se cargarán dinámicamente -->
+                    </div>
+                    <div class="comment-input-container">
+                        <img class="comment-avatar" src="">
+                        <input type="text" class="comment-input" placeholder="Escribe un comentario..." id="comment-input" onkeypress="handleCommentEnter(event)">
+                        <button class="send-comment-btn" onclick="sendComment()">
+                            <i class="fas fa-paper-plane"></i>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <!-- Pantalla de Historial de Llamadas -->
     <div id="calls-history-screen" class="screen">
         <div class="calls-header">
@@ -717,6 +869,10 @@
             <div class="nav-item" onclick="showSection('translate')">
                 <i class="fas fa-language"></i>
                 <span>Traducir</span>
+            </div>
+            <div class="nav-item" onclick="showSection('moments')">
+                <i class="fas fa-camera"></i>
+                <span>Momentos</span>
             </div>
             <div class="nav-item" onclick="showSection('calls')">
                 <i class="fas fa-phone"></i>
@@ -954,6 +1110,10 @@
             <div class="nav-item" onclick="showSection('translate')">
                 <i class="fas fa-language"></i>
                 <span>Traducir</span>
+            </div>
+            <div class="nav-item" onclick="showSection('moments')">
+                <i class="fas fa-camera"></i>
+                <span>Momentos</span>
             </div>
             <div class="nav-item" onclick="showSection('calls')">
                 <i class="fas fa-phone"></i>

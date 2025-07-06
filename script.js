@@ -1467,6 +1467,45 @@ function closeSuccessModal() {
     }
 }
 
+// Función para mostrar secciones de navegación
+function showSection(section) {
+    // Ocultar todas las pantallas
+    document.querySelectorAll('.screen').forEach(screen => {
+        screen.classList.remove('active');
+    });
+    
+    // Actualizar navegación
+    document.querySelectorAll('.nav-item').forEach(item => {
+        item.classList.remove('active');
+    });
+    
+    // Mostrar pantalla correspondiente
+    switch(section) {
+        case 'chats':
+            switchScreen('chat-list');
+            loadUserContacts();
+            break;
+        case 'translate':
+            showTranslateSection();
+            break;
+        case 'moments':
+            switchScreen('moments');
+            loadMoments();
+            break;
+        case 'calls':
+            switchScreen('calls-history');
+            loadCallHistory();
+            break;
+        case 'settings':
+            switchScreen('settings');
+            initializeSettings();
+            break;
+    }
+    
+    // Marcar como activo
+    document.querySelector(`.nav-item[onclick="showSection('${section}')"]`)?.classList.add('active');
+}
+
 // Limpiar listeners cuando se sale de un chat
 function cleanupChatListeners() {
     if (messagesListener) {
@@ -2105,6 +2144,12 @@ let currentSwipeItem = null;
 let isSwipeActive = false;
 let mutedChats = new Map(); // Map para guardar chats silenciados con timestamp
 
+// Variables para el sistema de Momentos
+let currentMoment = null;
+let momentsListener = null;
+let selectedMomentImage = null;
+let moments = new Map();
+
 // Funciones para la sección de ajustes
 function initializeSettings() {
     if (currentUser) {
@@ -2450,6 +2495,412 @@ function toggleCallNotifications(toggle) {
         '📞 Notificaciones de llamadas activadas' : 
         '📞 Notificaciones de llamadas desactivadas'
     );
+}
+
+
+// ================================
+// SISTEMA DE MOMENTOS
+// ================================
+
+// Función para cargar momentos desde Firebase
+function loadMoments() {
+    if (!currentUser || !currentUser.uid) return;
+    
+    console.log('Cargando momentos...');
+    const momentsContainer = document.getElementById('moments-container');
+    
+    // Mostrar indicador de carga
+    momentsContainer.innerHTML = `
+        <div class="loading-moments">
+            <i class="fas fa-spinner fa-spin"></i>
+            <p>Cargando momentos...</p>
+        </div>
+    `;
+    
+    // Configurar listener para momentos en tiempo real
+    if (momentsListener) {
+        momentsListener.off();
+    }
+    
+    momentsListener = database.ref('moments').orderByChild('timestamp').limitToLast(50);
+    
+    momentsListener.on('value', (snapshot) => {
+        const momentsData = snapshot.val() || {};
+        const momentsList = Object.keys(momentsData).map(key => ({
+            id: key,
+            ...momentsData[key]
+        })).reverse(); // Más recientes primero
+        
+        if (momentsList.length === 0) {
+            showEmptyMoments();
+        } else {
+            displayMoments(momentsList);
+        }
+    });
+}
+
+// Función para mostrar estado vacío de momentos
+function showEmptyMoments() {
+    const momentsContainer = document.getElementById('moments-container');
+    momentsContainer.innerHTML = `
+        <div class="empty-moments">
+            <div class="empty-moments-icon">
+                <i class="fas fa-camera-retro"></i>
+            </div>
+            <h3>¡Comparte tu primer momento!</h3>
+            <p>Los momentos te permiten compartir fotos e historias con tus contactos</p>
+            <button class="primary-btn" onclick="showCreateMoment()">
+                <i class="fas fa-plus"></i>
+                Crear Momento
+            </button>
+        </div>
+    `;
+}
+
+// Función para mostrar lista de momentos
+function displayMoments(momentsList) {
+    const momentsContainer = document.getElementById('moments-container');
+    
+    momentsContainer.innerHTML = momentsList.map(moment => {
+        const timeAgo = getTimeAgo(moment.timestamp);
+        const avatarUrl = moment.authorAvatar || `https://api.dicebear.com/7.x/avataaars/svg?seed=${moment.authorId}`;
+        
+        return `
+            <div class="moment-item" style="animation-delay: ${Math.random() * 0.5}s">
+                <div class="moment-header">
+                    <img class="moment-avatar" src="${avatarUrl}" alt="${moment.authorName}">
+                    <div class="moment-author-info">
+                        <div class="moment-author-name">${moment.authorName}</div>
+                        <div class="moment-timestamp">${timeAgo}</div>
+                    </div>
+                </div>
+                <div class="moment-content" onclick="viewMoment('${moment.id}')">
+                    ${moment.imageUrl ? `<img class="moment-image" src="${moment.imageUrl}" alt="Momento">` : ''}
+                    ${moment.text ? `<div class="moment-text">${moment.text}</div>` : ''}
+                </div>
+                <div class="moment-actions">
+                    <button class="moment-action-btn ${moment.reactions?.like?.includes(currentUser.uid) ? 'reacted' : ''}" onclick="reactToMoment('${moment.id}', 'like')">
+                        <i class="fas fa-heart"></i>
+                        <span>${moment.reactions?.like?.length || 0}</span>
+                    </button>
+                    <button class="moment-action-btn ${moment.reactions?.laugh?.includes(currentUser.uid) ? 'reacted' : ''}" onclick="reactToMoment('${moment.id}', 'laugh')">
+                        <i class="fas fa-laugh"></i>
+                        <span>${moment.reactions?.laugh?.length || 0}</span>
+                    </button>
+                    <button class="moment-action-btn" onclick="viewMoment('${moment.id}')">
+                        <i class="fas fa-comment"></i>
+                        <span>${moment.commentsCount || 0}</span>
+                    </button>
+                </div>
+            </div>
+        `;
+    }).join('');
+}
+
+// Función para mostrar modal de crear momento
+function showCreateMoment() {
+    const modal = document.getElementById('create-moment-modal');
+    modal.style.display = 'flex';
+    setTimeout(() => modal.classList.add('show'), 10);
+    
+    // Resetear formulario
+    document.getElementById('moment-text').value = '';
+    document.getElementById('moment-char-count').textContent = '0';
+    document.getElementById('upload-placeholder').style.display = 'flex';
+    document.getElementById('moment-preview').style.display = 'none';
+    document.querySelector('.publish-moment-btn').disabled = true;
+    selectedMomentImage = null;
+}
+
+// Función para ocultar modal de crear momento
+function hideCreateMoment() {
+    const modal = document.getElementById('create-moment-modal');
+    modal.classList.remove('show');
+    setTimeout(() => modal.style.display = 'none', 300);
+}
+
+// Función para seleccionar imagen del momento
+function selectMomentImage() {
+    document.getElementById('moment-image-input').click();
+}
+
+// Función para manejar selección de imagen
+function handleMomentImageSelect(event) {
+    const file = event.target.files[0];
+    if (file && file.type.startsWith('image/')) {
+        selectedMomentImage = file;
+        
+        // Mostrar preview
+        const reader = new FileReader();
+        reader.onload = function(e) {
+            document.getElementById('upload-placeholder').style.display = 'none';
+            const preview = document.getElementById('moment-preview');
+            preview.src = e.target.result;
+            preview.style.display = 'block';
+            updatePublishButton();
+        };
+        reader.readAsDataURL(file);
+    }
+}
+
+// Función para actualizar texto del momento
+function updateMomentText() {
+    const text = document.getElementById('moment-text').value;
+    document.getElementById('moment-char-count').textContent = text.length;
+    updatePublishButton();
+}
+
+// Función para actualizar estado del botón publicar
+function updatePublishButton() {
+    const text = document.getElementById('moment-text').value.trim();
+    const hasImage = selectedMomentImage !== null;
+    const hasContent = text.length > 0 || hasImage;
+    
+    document.querySelector('.publish-moment-btn').disabled = !hasContent;
+}
+
+// Función para publicar momento
+async function publishMoment() {
+    if (!currentUser) return;
+    
+    const text = document.getElementById('moment-text').value.trim();
+    const publishBtn = document.querySelector('.publish-moment-btn');
+    
+    if (!text && !selectedMomentImage) {
+        showErrorMessage('Agrega texto o una imagen para publicar tu momento');
+        return;
+    }
+    
+    // Mostrar loading
+    publishBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Publicando...';
+    publishBtn.disabled = true;
+    
+    try {
+        let imageUrl = null;
+        
+        // Subir imagen si existe
+        if (selectedMomentImage) {
+            imageUrl = await uploadToFirebase(selectedMomentImage, 'image');
+        }
+        
+        // Crear momento
+        const momentData = {
+            authorId: currentUser.uid,
+            authorName: currentUser.username || currentUser.phoneNumber,
+            authorAvatar: currentUser.avatar,
+            text: text,
+            imageUrl: imageUrl,
+            timestamp: Date.now(),
+            reactions: {
+                like: [],
+                laugh: [],
+                wow: []
+            },
+            commentsCount: 0
+        };
+        
+        // Guardar en Firebase
+        await database.ref('moments').push(momentData);
+        
+        console.log('Momento publicado exitosamente');
+        hideCreateMoment();
+        showInstantNotification('✨ ¡Momento publicado exitosamente!', 'friend-request');
+        
+    } catch (error) {
+        console.error('Error publicando momento:', error);
+        showErrorMessage('Error publicando momento. Intenta de nuevo.');
+    } finally {
+        publishBtn.innerHTML = '<i class="fas fa-send"></i> Publicar';
+        publishBtn.disabled = false;
+    }
+}
+
+// Función para reaccionar a un momento
+function reactToMoment(momentId, reactionType) {
+    if (!currentUser || !momentId) return;
+    
+    console.log(`Reaccionando al momento ${momentId} con ${reactionType}`);
+    
+    const momentRef = database.ref(`moments/${momentId}/reactions/${reactionType}`);
+    
+    momentRef.once('value').then(snapshot => {
+        let reactions = snapshot.val() || [];
+        const userIndex = reactions.indexOf(currentUser.uid);
+        
+        if (userIndex > -1) {
+            // Quitar reacción
+            reactions.splice(userIndex, 1);
+        } else {
+            // Agregar reacción
+            reactions.push(currentUser.uid);
+        }
+        
+        // Actualizar en Firebase
+        momentRef.set(reactions).then(() => {
+            console.log('Reacción actualizada');
+            // La UI se actualizará automáticamente por el listener
+        });
+    });
+}
+
+// Función para ver momento completo
+function viewMoment(momentId) {
+    if (!momentId) return;
+    
+    database.ref(`moments/${momentId}`).once('value').then(snapshot => {
+        if (snapshot.exists()) {
+            const moment = snapshot.val();
+            currentMoment = { id: momentId, ...moment };
+            showViewMomentModal(moment);
+            loadMomentComments(momentId);
+        }
+    });
+}
+
+// Función para mostrar modal de ver momento
+function showViewMomentModal(moment) {
+    const modal = document.getElementById('view-moment-modal');
+    
+    // Llenar información del momento
+    document.getElementById('view-moment-avatar').src = moment.authorAvatar || `https://api.dicebear.com/7.x/avataaars/svg?seed=${moment.authorId}`;
+    document.getElementById('view-moment-author').textContent = moment.authorName;
+    document.getElementById('view-moment-time').textContent = getTimeAgo(moment.timestamp);
+    
+    if (moment.imageUrl) {
+        document.getElementById('view-moment-image').src = moment.imageUrl;
+        document.querySelector('.moment-image-container').style.display = 'block';
+    } else {
+        document.querySelector('.moment-image-container').style.display = 'none';
+    }
+    
+    if (moment.text) {
+        document.getElementById('view-moment-text').textContent = moment.text;
+        document.querySelector('.moment-text-content').style.display = 'block';
+    } else {
+        document.querySelector('.moment-text-content').style.display = 'none';
+    }
+    
+    // Actualizar contadores de reacciones
+    document.getElementById('like-count').textContent = moment.reactions?.like?.length || 0;
+    document.getElementById('laugh-count').textContent = moment.reactions?.laugh?.length || 0;
+    document.getElementById('wow-count').textContent = moment.reactions?.wow?.length || 0;
+    
+    // Configurar avatar de comentario
+    const commentAvatar = document.querySelector('.comment-input-container .comment-avatar');
+    commentAvatar.src = currentUser.avatar || `https://api.dicebear.com/7.x/avataaars/svg?seed=${currentUser.phoneNumber}`;
+    
+    modal.style.display = 'flex';
+    setTimeout(() => modal.classList.add('show'), 10);
+}
+
+// Función para ocultar modal de ver momento
+function hideViewMoment() {
+    const modal = document.getElementById('view-moment-modal');
+    modal.classList.remove('show');
+    setTimeout(() => modal.style.display = 'none', 300);
+    currentMoment = null;
+}
+
+// Función para cargar comentarios del momento
+function loadMomentComments(momentId) {
+    const commentsList = document.getElementById('comments-list');
+    
+    database.ref(`momentComments/${momentId}`).orderByChild('timestamp').on('value', snapshot => {
+        const comments = snapshot.val() || {};
+        const commentsList = document.getElementById('comments-list');
+        const commentsArray = Object.keys(comments).map(key => ({
+            id: key,
+            ...comments[key]
+        }));
+        
+        // Actualizar contador
+        document.getElementById('comments-count').textContent = commentsArray.length;
+        
+        if (commentsArray.length === 0) {
+            commentsList.innerHTML = `
+                <div style="text-align: center; padding: 2rem; color: var(--text-secondary);">
+                    <i class="fas fa-comment"></i>
+                    <p>Sé el primero en comentar</p>
+                </div>
+            `;
+        } else {
+            commentsList.innerHTML = commentsArray.map(comment => `
+                <div class="comment-item">
+                    <img class="comment-avatar" src="${comment.authorAvatar}" alt="${comment.authorName}">
+                    <div class="comment-content">
+                        <div class="comment-author">${comment.authorName}</div>
+                        <div class="comment-text">${comment.text}</div>
+                        <div class="comment-time">${getTimeAgo(comment.timestamp)}</div>
+                    </div>
+                </div>
+            `).join('');
+        }
+    });
+}
+
+// Función para enviar comentario
+function sendComment() {
+    if (!currentMoment || !currentUser) return;
+    
+    const commentInput = document.getElementById('comment-input');
+    const text = commentInput.value.trim();
+    
+    if (!text) return;
+    
+    const commentData = {
+        authorId: currentUser.uid,
+        authorName: currentUser.username || currentUser.phoneNumber,
+        authorAvatar: currentUser.avatar || `https://api.dicebear.com/7.x/avataaars/svg?seed=${currentUser.phoneNumber}`,
+        text: text,
+        timestamp: Date.now()
+    };
+    
+    // Agregar comentario a Firebase
+    database.ref(`momentComments/${currentMoment.id}`).push(commentData).then(() => {
+        // Incrementar contador de comentarios
+        const currentCount = currentMoment.commentsCount || 0;
+        database.ref(`moments/${currentMoment.id}/commentsCount`).set(currentCount + 1);
+        
+        commentInput.value = '';
+        console.log('Comentario agregado');
+    });
+}
+
+// Función para manejar Enter en comentarios
+function handleCommentEnter(event) {
+    if (event.key === 'Enter') {
+        sendComment();
+    }
+}
+
+// Función para obtener tiempo relativo
+function getTimeAgo(timestamp) {
+    const now = Date.now();
+    const diff = now - timestamp;
+    
+    const minutes = Math.floor(diff / 60000);
+    const hours = Math.floor(diff / 3600000);
+    const days = Math.floor(diff / 86400000);
+    
+    if (minutes < 1) return 'Ahora';
+    if (minutes < 60) return `${minutes}m`;
+    if (hours < 24) return `${hours}h`;
+    if (days < 30) return `${days}d`;
+    
+    return new Date(timestamp).toLocaleDateString();
+}
+
+// Función para traducir sección (placeholder)
+function showTranslateSection() {
+    showFullScreenMessage('🌍 Traductor Global', 
+        'Esta función estará disponible próximamente. Podrás traducir texto y conversaciones en tiempo real.', 
+        'info');
+}
+
+// Función para cargar historial de llamadas (placeholder)
+function loadCallHistory() {
+    console.log('Cargando historial de llamadas...');
+    // Implementar según necesidades
 }
 
 function toggleAutoTranslate(toggle) {
