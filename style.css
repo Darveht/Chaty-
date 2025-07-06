@@ -1287,6 +1287,138 @@ body {
     transform: translateX(26px);
 }
 
+/* Privacy Settings Screen */
+.privacy-settings-container {
+    height: 100vh;
+    background: var(--background);
+    overflow-y: auto;
+}
+
+.privacy-header {
+    position: sticky;
+    top: 0;
+    background: var(--background);
+    padding: 1rem 1.5rem;
+    border-bottom: 1px solid var(--border-color);
+    z-index: 100;
+    backdrop-filter: blur(10px);
+}
+
+.privacy-header h2 {
+    margin: 0.5rem 0 0.25rem 0;
+    font-size: 1.5rem;
+    font-weight: 700;
+    color: var(--text-primary);
+}
+
+.privacy-subtitle {
+    color: var(--text-secondary);
+    font-size: 0.9rem;
+    line-height: 1.4;
+}
+
+.privacy-content {
+    padding: 1rem 1.5rem 2rem;
+}
+
+.privacy-section {
+    margin-bottom: 2rem;
+}
+
+.section-header {
+    display: flex;
+    align-items: center;
+    margin-bottom: 1rem;
+    padding-bottom: 0.5rem;
+    border-bottom: 1px solid var(--border-color);
+}
+
+.section-header i {
+    font-size: 1.2rem;
+    color: var(--primary-color);
+    margin-right: 0.75rem;
+}
+
+.section-header h3 {
+    margin: 0;
+    font-size: 1.1rem;
+    font-weight: 600;
+    color: var(--text-primary);
+}
+
+.privacy-option {
+    display: flex;
+    align-items: center;
+    padding: 1rem;
+    background: var(--surface);
+    border-radius: 16px;
+    margin-bottom: 0.75rem;
+    cursor: pointer;
+    transition: var(--transition);
+    border: 1px solid var(--border-color);
+}
+
+.privacy-option:hover {
+    background: var(--surface-hover);
+    transform: translateY(-1px);
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
+}
+
+.option-info {
+    flex: 1;
+}
+
+.option-title {
+    font-weight: 600;
+    font-size: 1rem;
+    margin-bottom: 0.25rem;
+    color: var(--text-primary);
+}
+
+.option-description {
+    color: var(--text-secondary);
+    font-size: 0.85rem;
+    line-height: 1.4;
+}
+
+.option-toggle, .option-arrow {
+    margin-left: 1rem;
+    color: var(--text-secondary);
+}
+
+.privacy-footer {
+    position: sticky;
+    bottom: 0;
+    background: var(--background);
+    padding: 1rem 1.5rem;
+    border-top: 1px solid var(--border-color);
+    backdrop-filter: blur(10px);
+}
+
+.privacy-note {
+    display: flex;
+    align-items: flex-start;
+    padding: 1rem;
+    background: rgba(52, 152, 219, 0.1);
+    border-radius: 12px;
+    border-left: 4px solid var(--primary-color);
+}
+
+.privacy-note i {
+    color: var(--primary-color);
+    margin-right: 0.75rem;
+    margin-top: 0.125rem;
+    font-size: 1rem;
+}
+
+.privacy-note p {
+    margin: 0;
+    color: var(--text-secondary);
+    font-size: 0.85rem;
+    line-height: 1.4;
+}6px);
+}
+
 /* Modal de edición de perfil */
 .edit-profile-modal {
     position: fixed;

@@ -961,24 +961,55 @@ function createContactItem(user) {
     chatItem.className = 'chat-item';
     chatItem.onclick = () => openChatWithUser(user);
 
-    // Generar avatar basado en el número de teléfono
-    const avatarSeed = user.phoneNumber.replace(/\D/g, '');
-    const avatarUrl = `https://api.dicebear.com/7.x/avataaars/svg?seed=${avatarSeed}`;
+    // Determinar avatar a mostrar basado en configuraciones de privacidad del usuario
+    let avatarUrl;
+    if (user.profilePhotoVisible !== false) {
+        // Usar avatar personalizado si está disponible y es visible
+        const avatarSeed = user.phoneNumber.replace(/\D/g, '');
+        avatarUrl = user.avatar || `https://api.dicebear.com/7.x/avataaars/svg?seed=${avatarSeed}`;
+    } else {
+        // Usar avatar genérico si la foto de perfil está oculta
+        avatarUrl = 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNDAiIGhlaWdodD0iNDAiIHZpZXdCb3g9IjAgMCA0MCA0MCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPGNpcmNsZSBjeD0iMjAiIGN5PSIyMCIgcj0iMjAiIGZpbGw9IiNjY2MiLz4KPHN2ZyB3aWR0aD0iMjAiIGhlaWdodD0iMjAiIHZpZXdCb3g9IjAgMCAyMCAyMCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIiBzdHlsZT0idHJhbnNmb3JtOiB0cmFuc2xhdGUoNTAlLCA1MCUpOyI+CjxwYXRoIGQ9Ik0xMCA5QzExLjY1NjkgOSAxMyA3LjY1NjkgMTMgNkMxMyA0LjM0MzEgMTEuNjU2OSAzIDEwIDNDOC4zNDMxNSAzIDcgNC4zNDMxIDcgNkM3IDcuNjU2OSA4LjM0MzE1IDkgMTAgOVoiIGZpbGw9IndoaXRlIi8+CjxwYXRoIGQ9Ik0xMCAxMUM3IDExIDQgMTMgNCAxNlYxN0gxNlYxNkMxNiAxMyAxMyAxMSAxMCAxMVoiIGZpbGw9IndoaXRlIi8+Cjwvc3ZnPgo8L3N2Zz4K';
+    }
 
-    // Formatear número de teléfono para mostrar
-    const displayNumber = user.phoneNumber;
+    // Determinar nombre a mostrar
+    const displayName = user.username || user.phoneNumber;
+    
+    // Determinar estado de conexión visible
+    let statusIndicator = '';
+    if (user.onlineStatusVisible !== false) {
+        statusIndicator = `<div class="status-indicator ${user.status === 'online' ? 'online' : 'offline'}"></div>`;
+    }
+
+    // Determinar última conexión visible
+    let lastSeenText = 'Toca para iniciar conversación';
+    if (user.lastSeenVisible !== false && user.lastSeen) {
+        const lastSeenDate = new Date(user.lastSeen);
+        const now = new Date();
+        const diffHours = Math.floor((now - lastSeenDate) / (1000 * 60 * 60));
+        
+        if (diffHours < 1) {
+            lastSeenText = 'Activo recientemente';
+        } else if (diffHours < 24) {
+            lastSeenText = `Último acceso hace ${diffHours}h`;
+        } else {
+            lastSeenText = `Último acceso ${lastSeenDate.toLocaleDateString()}`;
+        }
+    }
 
     chatItem.innerHTML = `
         <div class="avatar">
-            <img src="${avatarUrl}" alt="${displayNumber}">
-            <div class="status-indicator ${user.status === 'online' ? 'online' : 'offline'}"></div>
+            <img src="${avatarUrl}" alt="${displayName}">
+            ${statusIndicator}
         </div>
         <div class="chat-info">
-            <div class="chat-name">${displayNumber}</div>
-            <div class="last-message">Toca para iniciar conversación</div>
+            <div class="chat-name">${displayName}</div>
+            <div class="last-message">${lastSeenText}</div>
         </div>
         <div class="chat-meta">
-            <div class="time">Activo</div>
+            <div class="time">
+                ${user.callsEnabled !== false ? '<i class="fas fa-phone" style="color: var(--accent-color); font-size: 0.8rem;"></i>' : '<i class="fas fa-phone-slash" style="color: var(--text-secondary); font-size: 0.8rem;"></i>'}
+            </div>
             <div class="language-indicator"></div>
         </div>
     `;
@@ -1304,12 +1335,25 @@ function closeDeviceApprovalModal() {
     }
 }
 
+// Variables globales para configuraciones de privacidad
+let privacySettings = {
+    profilePhotoVisible: true,
+    callsEnabled: true,
+    lastSeenVisible: true,
+    statusVisible: true,
+    onlineStatusVisible: true
+};
+
 // Funciones para la sección de ajustes
 function initializeSettings() {
     if (currentUser) {
+        // Cargar configuraciones de privacidad desde Firebase
+        loadPrivacySettings();
+        
         // Configurar avatar inicial
         const avatarSeed = currentUser.phoneNumber.replace(/\D/g, '');
-        const avatarUrl = `https://api.dicebear.com/7.x/avataaars/svg?seed=${avatarSeed}`;
+        const defaultAvatarUrl = `https://api.dicebear.com/7.x/avataaars/svg?seed=${avatarSeed}`;
+        const avatarUrl = currentUser.avatar || defaultAvatarUrl;
 
         document.getElementById('profile-avatar').src = avatarUrl;
         document.getElementById('profile-phone-display').textContent = currentUser.phoneNumber;
@@ -1318,9 +1362,89 @@ function initializeSettings() {
         // Configurar modal de edición
         document.getElementById('avatar-preview').src = avatarUrl;
         document.getElementById('username-input').value = currentUser.username || '';
-        document.getElementById('status-input').value = currentUser.status || '';
+        document.getElementById('status-input').value = currentUser.customStatus || '';
         document.getElementById('phone-readonly').value = currentUser.phoneNumber;
+        
+        // Configurar toggles de privacidad
+        setupPrivacyToggles();
     }
+}
+
+// Función para cargar configuraciones de privacidad desde Firebase
+function loadPrivacySettings() {
+    if (!currentUser || !currentUser.uid) return;
+    
+    database.ref(`users/${currentUser.uid}/privacySettings`).once('value')
+        .then(snapshot => {
+            if (snapshot.exists()) {
+                privacySettings = { ...privacySettings, ...snapshot.val() };
+                console.log('Configuraciones de privacidad cargadas:', privacySettings);
+            } else {
+                // Configuraciones por defecto
+                savePrivacySettings();
+            }
+            updatePrivacyUI();
+        })
+        .catch(error => {
+            console.error('Error cargando configuraciones de privacidad:', error);
+        });
+}
+
+// Función para guardar configuraciones de privacidad en Firebase
+function savePrivacySettings() {
+    if (!currentUser || !currentUser.uid) return;
+    
+    return database.ref(`users/${currentUser.uid}/privacySettings`).set(privacySettings)
+        .then(() => {
+            console.log('Configuraciones de privacidad guardadas en Firebase');
+            // Actualizar configuraciones globales del usuario
+            database.ref(`users/${currentUser.uid}/profilePhotoVisible`).set(privacySettings.profilePhotoVisible);
+            database.ref(`users/${currentUser.uid}/callsEnabled`).set(privacySettings.callsEnabled);
+        })
+        .catch(error => {
+            console.error('Error guardando configuraciones de privacidad:', error);
+        });
+}
+
+// Función para configurar los toggles de privacidad
+function setupPrivacyToggles() {
+    // Configurar toggle de foto de perfil
+    const photoToggle = document.getElementById('profile-photo-toggle');
+    if (photoToggle) {
+        if (privacySettings.profilePhotoVisible) {
+            photoToggle.classList.add('active');
+        } else {
+            photoToggle.classList.remove('active');
+        }
+    }
+    
+    // Configurar toggle de llamadas
+    const callsToggle = document.getElementById('calls-enabled-toggle');
+    if (callsToggle) {
+        if (privacySettings.callsEnabled) {
+            callsToggle.classList.add('active');
+        } else {
+            callsToggle.classList.remove('active');
+        }
+    }
+    
+    // Configurar toggle de última conexión
+    const lastSeenToggle = document.getElementById('last-seen-toggle');
+    if (lastSeenToggle) {
+        if (privacySettings.lastSeenVisible) {
+            lastSeenToggle.classList.add('active');
+        } else {
+            lastSeenToggle.classList.remove('active');
+        }
+    }
+}
+
+// Función para actualizar UI de privacidad
+function updatePrivacyUI() {
+    setupPrivacyToggles();
+    
+    // Actualizar avatar visible en toda la aplicación
+    updateAvatarVisibility();
 }
 
 function showEditProfile() {
@@ -1467,22 +1591,52 @@ function saveProfile() {
     const avatarSrc = document.getElementById('avatar-preview').src;
 
     if (username) {
-        // Actualizar perfil del usuario
+        // Mostrar loading
+        const saveBtn = document.querySelector('.save-profile-btn');
+        const originalText = saveBtn.innerHTML;
+        saveBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Guardando...';
+        saveBtn.disabled = true;
+
+        // Actualizar perfil del usuario localmente
         if (currentUser) {
             currentUser.username = username;
             currentUser.customStatus = status;
             currentUser.avatar = avatarSrc;
 
-            // Simular guardado en base de datos
-            console.log('Perfil actualizado:', currentUser);
+            // Preparar datos para Firebase
+            const profileUpdates = {
+                username: username,
+                customStatus: status,
+                avatar: avatarSrc,
+                lastUpdated: firebase.database.ServerValue.TIMESTAMP
+            };
 
-            // Actualizar UI
-            document.getElementById('profile-username').textContent = username;
-            document.getElementById('profile-avatar').src = avatarSrc;
+            // Guardar en Firebase Realtime Database
+            database.ref(`users/${currentUser.uid}`).update(profileUpdates)
+                .then(() => {
+                    console.log('Perfil guardado exitosamente en Firebase');
+                    
+                    // Actualizar localStorage
+                    localStorage.setItem('uberchat_user', JSON.stringify(currentUser));
+                    
+                    // Actualizar UI
+                    document.getElementById('profile-username').textContent = username;
+                    document.getElementById('profile-avatar').src = avatarSrc;
+                    
+                    // Restaurar botón
+                    saveBtn.innerHTML = originalText;
+                    saveBtn.disabled = false;
+                    
+                    hideEditProfile();
+                    showSuccessMessage('✅ Perfil actualizado y guardado en tiempo real');
+                })
+                .catch(error => {
+                    console.error('Error guardando perfil en Firebase:', error);
+                    saveBtn.innerHTML = originalText;
+                    saveBtn.disabled = false;
+                    showErrorMessage('Error guardando perfil. Intenta de nuevo.');
+                });
         }
-
-        hideEditProfile();
-        showSuccessMessage('✅ Perfil actualizado correctamente');
     } else {
         showErrorMessage('Por favor ingresa un nombre de usuario');
     }
@@ -1521,9 +1675,301 @@ function toggleAutoTranslate(toggle) {
 }
 
 function showPrivacySettings() {
-    showFullScreenMessage('🔒 Configuración de Privacidad', 
-        'Aquí podrás gestionar quién puede contactarte y ver tu información.', 
+    // Crear pantalla completa de configuraciones de privacidad
+    const privacyScreen = document.createElement('div');
+    privacyScreen.id = 'privacy-settings-screen';
+    privacyScreen.className = 'screen active';
+
+    privacyScreen.innerHTML = `
+        <div class="privacy-settings-container">
+            <div class="privacy-header">
+                <button class="back-btn" onclick="closePrivacySettings()">
+                    <i class="fas fa-arrow-left"></i>
+                </button>
+                <h2>Privacidad y Seguridad</h2>
+                <div class="privacy-subtitle">Controla quién puede ver tu información y contactarte</div>
+            </div>
+
+            <div class="privacy-content">
+                <div class="privacy-section">
+                    <div class="section-header">
+                        <i class="fas fa-user-circle"></i>
+                        <h3>Perfil</h3>
+                    </div>
+                    
+                    <div class="privacy-option">
+                        <div class="option-info">
+                            <div class="option-title">Foto de Perfil</div>
+                            <div class="option-description">Permite que otros usuarios vean tu foto de perfil</div>
+                        </div>
+                        <div class="option-toggle">
+                            <div class="toggle-switch ${privacySettings.profilePhotoVisible ? 'active' : ''}" id="profile-photo-toggle" onclick="toggleProfilePhotoVisibility(this)">
+                                <div class="toggle-slider"></div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="privacy-option">
+                        <div class="option-info">
+                            <div class="option-title">Estado Personal</div>
+                            <div class="option-description">Mostrar tu estado personalizado a otros usuarios</div>
+                        </div>
+                        <div class="option-toggle">
+                            <div class="toggle-switch ${privacySettings.statusVisible ? 'active' : ''}" id="status-toggle" onclick="toggleStatusVisibility(this)">
+                                <div class="toggle-slider"></div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="privacy-option">
+                        <div class="option-info">
+                            <div class="option-title">Última Conexión</div>
+                            <div class="option-description">Permitir que otros vean cuándo estuviste en línea por última vez</div>
+                        </div>
+                        <div class="option-toggle">
+                            <div class="toggle-switch ${privacySettings.lastSeenVisible ? 'active' : ''}" id="last-seen-toggle" onclick="toggleLastSeenVisibility(this)">
+                                <div class="toggle-slider"></div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="privacy-option">
+                        <div class="option-info">
+                            <div class="option-title">Estado En Línea</div>
+                            <div class="option-description">Mostrar cuando estás conectado actualmente</div>
+                        </div>
+                        <div class="option-toggle">
+                            <div class="toggle-switch ${privacySettings.onlineStatusVisible ? 'active' : ''}" id="online-status-toggle" onclick="toggleOnlineStatusVisibility(this)">
+                                <div class="toggle-slider"></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="privacy-section">
+                    <div class="section-header">
+                        <i class="fas fa-phone"></i>
+                        <h3>Comunicación</h3>
+                    </div>
+                    
+                    <div class="privacy-option">
+                        <div class="option-info">
+                            <div class="option-title">Recibir Llamadas</div>
+                            <div class="option-description">Permitir que otros usuarios te llamen</div>
+                        </div>
+                        <div class="option-toggle">
+                            <div class="toggle-switch ${privacySettings.callsEnabled ? 'active' : ''}" id="calls-enabled-toggle" onclick="toggleCallsEnabled(this)">
+                                <div class="toggle-slider"></div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="privacy-option">
+                        <div class="option-info">
+                            <div class="option-title">Solo Contactos</div>
+                            <div class="option-description">Solo tus contactos pueden enviarte mensajes</div>
+                        </div>
+                        <div class="option-toggle">
+                            <div class="toggle-switch" id="contacts-only-toggle" onclick="toggleContactsOnly(this)">
+                                <div class="toggle-slider"></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="privacy-section">
+                    <div class="section-header">
+                        <i class="fas fa-shield-alt"></i>
+                        <h3>Seguridad</h3>
+                    </div>
+                    
+                    <div class="privacy-option" onclick="showBlockedUsers()">
+                        <div class="option-info">
+                            <div class="option-title">Usuarios Bloqueados</div>
+                            <div class="option-description">Gestionar lista de usuarios bloqueados</div>
+                        </div>
+                        <div class="option-arrow">
+                            <i class="fas fa-chevron-right"></i>
+                        </div>
+                    </div>
+
+                    <div class="privacy-option" onclick="showSecurityLog()">
+                        <div class="option-info">
+                            <div class="option-title">Registro de Seguridad</div>
+                            <div class="option-description">Ver intentos de acceso recientes</div>
+                        </div>
+                        <div class="option-arrow">
+                            <i class="fas fa-chevron-right"></i>
+                        </div>
+                    </div>
+
+                    <div class="privacy-option" onclick="showDataSettings()">
+                        <div class="option-info">
+                            <div class="option-title">Mis Datos</div>
+                            <div class="option-description">Exportar o eliminar mis datos</div>
+                        </div>
+                        <div class="option-arrow">
+                            <i class="fas fa-chevron-right"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="privacy-footer">
+                <div class="privacy-note">
+                    <i class="fas fa-info-circle"></i>
+                    <p>Los cambios se aplicarán en tiempo real. Otros usuarios verán los cambios inmediatamente.</p>
+                </div>
+            </div>
+        </div>
+    `;
+
+    // Ocultar pantalla actual
+    const currentScreenElement = document.querySelector('.screen.active');
+    if (currentScreenElement && currentScreenElement !== privacyScreen) {
+        currentScreenElement.classList.remove('active');
+    }
+
+    document.body.appendChild(privacyScreen);
+}
+
+function closePrivacySettings() {
+    const privacyScreen = document.getElementById('privacy-settings-screen');
+    if (privacyScreen) {
+        document.body.removeChild(privacyScreen);
+        switchScreen('settings');
+    }
+}
+
+// Funciones para toggle de configuraciones de privacidad
+function toggleProfilePhotoVisibility(toggle) {
+    toggle.classList.toggle('active');
+    const isVisible = toggle.classList.contains('active');
+    
+    privacySettings.profilePhotoVisible = isVisible;
+    savePrivacySettings();
+    updateAvatarVisibility();
+    
+    showInstantNotification(
+        isVisible ? 
+        '👁️ Foto de perfil ahora es visible para todos' : 
+        '🙈 Foto de perfil oculta para otros usuarios', 
+        'friend-request'
+    );
+}
+
+function toggleCallsEnabled(toggle) {
+    toggle.classList.toggle('active');
+    const isEnabled = toggle.classList.contains('active');
+    
+    privacySettings.callsEnabled = isEnabled;
+    savePrivacySettings();
+    
+    showInstantNotification(
+        isEnabled ? 
+        '📞 Llamadas activadas - otros pueden llamarte' : 
+        '🔇 Llamadas silenciadas - no recibirás llamadas', 
+        'friend-request'
+    );
+}
+
+function toggleStatusVisibility(toggle) {
+    toggle.classList.toggle('active');
+    const isVisible = toggle.classList.contains('active');
+    
+    privacySettings.statusVisible = isVisible;
+    savePrivacySettings();
+    
+    showInstantNotification(
+        isVisible ? 
+        '💬 Estado personal visible para otros' : 
+        '🤐 Estado personal oculto', 
+        'friend-request'
+    );
+}
+
+function toggleLastSeenVisibility(toggle) {
+    toggle.classList.toggle('active');
+    const isVisible = toggle.classList.contains('active');
+    
+    privacySettings.lastSeenVisible = isVisible;
+    savePrivacySettings();
+    
+    showInstantNotification(
+        isVisible ? 
+        '⏰ Última conexión visible para otros' : 
+        '👻 Última conexión oculta', 
+        'friend-request'
+    );
+}
+
+function toggleOnlineStatusVisibility(toggle) {
+    toggle.classList.toggle('active');
+    const isVisible = toggle.classList.contains('active');
+    
+    privacySettings.onlineStatusVisible = isVisible;
+    savePrivacySettings();
+    
+    showInstantNotification(
+        isVisible ? 
+        '🟢 Estado en línea visible' : 
+        '⚫ Aparecerás como desconectado', 
+        'friend-request'
+    );
+}
+
+function toggleContactsOnly(toggle) {
+    toggle.classList.toggle('active');
+    const isEnabled = toggle.classList.contains('active');
+    
+    // Esta función se puede implementar más adelante
+    showInstantNotification(
+        isEnabled ? 
+        '🔒 Solo contactos pueden escribirte' : 
+        '🌍 Cualquiera puede escribirte', 
+        'friend-request'
+    );
+}
+
+// Función para actualizar visibilidad de avatar en tiempo real
+function updateAvatarVisibility() {
+    if (!currentUser) return;
+    
+    const avatarElements = document.querySelectorAll('img[src*="api.dicebear"], .avatar img, .profile-avatar');
+    
+    avatarElements.forEach(img => {
+        if (privacySettings.profilePhotoVisible) {
+            img.style.opacity = '1';
+            img.style.filter = 'none';
+        } else {
+            // Mostrar avatar genérico o placeholder
+            const placeholder = 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNDAiIGhlaWdodD0iNDAiIHZpZXdCb3g9IjAgMCA0MCA0MCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPGNpcmNsZSBjeD0iMjAiIGN5PSIyMCIgcj0iMjAiIGZpbGw9IiNjY2MiLz4KPHN2ZyB3aWR0aD0iMjAiIGhlaWdodD0iMjAiIHZpZXdCb3g9IjAgMCAyMCAyMCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIiBzdHlsZT0idHJhbnNmb3JtOiB0cmFuc2xhdGUoNTAlLCA1MCUpOyI+CjxwYXRoIGQ9Ik0xMCA5QzExLjY1NjkgOSAxMyA3LjY1NjkgMTMgNkMxMyA0LjM0MzEgMTEuNjU2OSAzIDEwIDNDOC4zNDMxNSAzIDcgNC4zNDMxIDcgNkM3IDcuNjU2OSA4LjM0MzE1IDkgMTAgOVoiIGZpbGw9IndoaXRlIi8+CjxwYXRoIGQ9Ik0xMCAxMUM3IDExIDQgMTMgNCAxNlYxN0gxNlYxNkMxNiAxMyAxMyAxMSAxMCAxMVoiIGZpbGw9IndoaXRlIi8+Cjwvc3ZnPgo8L3N2Zz4K';
+            
+            if (!img.src.includes('data:image/svg+xml')) {
+                img.dataset.originalSrc = img.src;
+                img.src = placeholder;
+            }
+        }
+    });
+}
+
+// Funciones adicionales para configuraciones de seguridad
+function showBlockedUsers() {
+    showFullScreenMessage('🚫 Usuarios Bloqueados', 
+        'No tienes usuarios bloqueados actualmente. Los usuarios bloqueados aparecerán aquí.', 
         'info');
+}
+
+function showSecurityLog() {
+    showFullScreenMessage('🛡️ Registro de Seguridad', 
+        'Último acceso: Ahora - Dispositivo actual\nUbicación: España\nDispositivo: Navegador web', 
+        'info');
+}
+
+function showDataSettings() {
+    showFullScreenMessage('📊 Mis Datos', 
+        'Puedes exportar todos tus datos o solicitar la eliminación de tu cuenta. Estos cambios son permanentes.', 
+        'warning');
 }
 
 function showStorageSettings() {
@@ -3189,6 +3635,12 @@ let callHistory = [];
 function startVoiceCall() {
     if (!currentChatContact) return;
 
+    // Verificar si el usuario tiene llamadas habilitadas
+    if (currentChatContact.callsEnabled === false) {
+        showErrorMessage('🔇 Este usuario ha desactivado las llamadas. No puedes llamarle en este momento.');
+        return;
+    }
+
     // Configurar pantalla de llamada de voz
     document.getElementById('call-contact-name').textContent = currentChatContact.name;
     document.getElementById('call-avatar-img').src = currentChatContact.avatar;
@@ -3204,6 +3656,12 @@ function startVoiceCall() {
 
 function startVideoCall() {
     if (!currentChatContact) return;
+
+    // Verificar si el usuario tiene llamadas habilitadas
+    if (currentChatContact.callsEnabled === false) {
+        showErrorMessage('🔇 Este usuario ha desactivado las llamadas. No puedes realizar videollamadas en este momento.');
+        return;
+    }
 
     // Configurar pantalla de videollamada
     document.getElementById('video-contact-name').textContent = currentChatContact.name;
