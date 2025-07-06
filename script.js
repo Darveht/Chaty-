@@ -720,27 +720,55 @@ function requestLoginApproval(phoneNumber, existingUserId, existingSessionId) {
     const deviceInfo = getDeviceFingerprint();
     const loginRequestId = Date.now().toString();
 
+    console.log('Enviando solicitud de aprobación para:', phoneNumber, 'a usuario:', existingUserId);
+
     // Crear solicitud de aprobación en Firebase
     const approvalRequest = {
         id: loginRequestId,
         phoneNumber: phoneNumber,
         requestingDevice: deviceInfo,
-        timestamp: firebase.database.ServerValue.TIMESTAMP,
+        timestamp: Date.now(), // Usar timestamp directo
         status: 'pending',
-        approvedBy: null
+        approvedBy: null,
+        existingUserId: existingUserId,
+        existingSessionId: existingSessionId
     };
 
-    database.ref(`loginApprovals/${existingUserId}/${loginRequestId}`).set(approvalRequest)
+    // Enviar solicitud principal
+    const approvalPromise = database.ref(`loginApprovals/${existingUserId}/${loginRequestId}`).set(approvalRequest);
+    
+    // Crear notificación directa para el usuario autorizado
+    const notificationData = {
+        type: 'login_approval_request',
+        from: 'security_system',
+        requestId: loginRequestId,
+        phoneNumber: phoneNumber,
+        deviceInfo: deviceInfo,
+        timestamp: Date.now(),
+        read: false
+    };
+    
+    const notificationPromise = database.ref(`notifications/${existingUserId}`).push(notificationData);
+    
+    // Actualizar flag de solicitud pendiente en el perfil del usuario
+    const flagPromise = database.ref(`users/${existingUserId}/pendingLoginApproval`).set({
+        requestId: loginRequestId,
+        fromDevice: deviceInfo,
+        timestamp: Date.now(),
+        phoneNumber: phoneNumber
+    });
+
+    Promise.all([approvalPromise, notificationPromise, flagPromise])
         .then(() => {
-            console.log('Solicitud de aprobación enviada');
+            console.log('✅ Solicitud de aprobación enviada exitosamente');
             showLoginRequestPending(deviceInfo);
 
             // Escuchar respuesta de aprobación
             listenForApprovalResponse(existingUserId, loginRequestId, phoneNumber);
         })
         .catch(error => {
-            console.error('Error enviando solicitud:', error);
-            showErrorMessage('Error enviando solicitud de aprobación.');
+            console.error('❌ Error enviando solicitud completa:', error);
+            showErrorMessage('Error enviando solicitud de aprobación. Verifica tu conexión.');
         });
 }
 
@@ -960,33 +988,74 @@ function showLoginRequestPending(deviceInfo) {
 
 // Función para escuchar respuesta de aprobación
 function listenForApprovalResponse(userId, requestId, phoneNumber) {
+    console.log('Configurando listener de respuesta para:', requestId);
+    
+    // Listener principal para la solicitud específica
     const approvalRef = database.ref(`loginApprovals/${userId}/${requestId}`);
+    
+    // Listener adicional para respuestas globales
+    const globalApprovalRef = database.ref(`globalApprovals/${requestId}`);
 
-    approvalRef.on('value', snapshot => {
-        const approval = snapshot.val();
-
-        if (approval && approval.status === 'approved') {
-            console.log('Inicio de sesión aprobado');
+    const handleApprovalResponse = (status, source) => {
+        console.log(`Respuesta de aprobación recibida: ${status} desde ${source}`);
+        
+        if (status === 'approved') {
+            console.log('✅ Inicio de sesión APROBADO');
             closePendingModal();
-            proceedWithVerification(phoneNumber);
-            approvalRef.off(); // Detener listener
-        } else if (approval && approval.status === 'denied') {
-            console.log('Inicio de sesión denegado');
+            
+            // Mostrar mensaje de éxito
+            showInstantNotification('✅ Acceso aprobado - Iniciando sesión...', 'friend-request');
+            
+            // Proceder con la verificación después de un breve delay
+            setTimeout(() => {
+                proceedWithVerification(phoneNumber);
+            }, 1000);
+            
+            // Limpiar listeners
+            approvalRef.off();
+            globalApprovalRef.off();
+            
+        } else if (status === 'denied') {
+            console.log('❌ Inicio de sesión DENEGADO');
             closePendingModal();
 
             // Bloquear por 10 minutos
             sessionManager.blockedUntil = Date.now() + (10 * 60 * 1000);
-            showErrorMessage('Acceso denegado por el usuario autorizado. Bloqueado por 10 minutos.');
-            approvalRef.off(); // Detener listener
+            
+            showFullScreenMessage('🚫 Acceso Denegado', 
+                'El usuario autorizado ha denegado tu solicitud de acceso. Tu dispositivo ha sido bloqueado temporalmente por 10 minutos por seguridad.', 
+                'denied');
+            
+            // Limpiar listeners
+            approvalRef.off();
+            globalApprovalRef.off();
+        }
+    };
+
+    // Escuchar cambios en la solicitud principal
+    approvalRef.on('value', snapshot => {
+        const approval = snapshot.val();
+        if (approval && (approval.status === 'approved' || approval.status === 'denied')) {
+            handleApprovalResponse(approval.status, 'direct');
+        }
+    });
+
+    // Escuchar cambios en respuestas globales (backup)
+    globalApprovalRef.on('value', snapshot => {
+        const globalApproval = snapshot.val();
+        if (globalApproval && (globalApproval.status === 'approved' || globalApproval.status === 'denied')) {
+            handleApprovalResponse(globalApproval.status, 'global');
         }
     });
 
     // Timeout después de 2 minutos
     setTimeout(() => {
         approvalRef.off();
+        globalApprovalRef.off();
+        
         if (sessionManager.pendingApproval) {
             closePendingModal();
-            showErrorMessage('Tiempo de espera agotado. La solicitud de aprobación expiró.');
+            showErrorMessage('⏱️ Tiempo de espera agotado. La solicitud de aprobación expiró después de 2 minutos.');
         }
     }, 120000); // 2 minutos
 }
@@ -1424,17 +1493,60 @@ function createActiveSession(userId, phoneNumber) {
 
 // Función para configurar listener de solicitudes de aprobación
 function setupLoginApprovalListener(userId) {
+    console.log('Configurando listener de aprobaciones para:', userId);
+    
+    // Limpiar listener anterior
     if (sessionManager.loginAttemptListener) {
         sessionManager.loginAttemptListener.off();
+        sessionManager.loginAttemptListener = null;
     }
 
+    // Listener principal para solicitudes de aprobación
     sessionManager.loginAttemptListener = database.ref(`loginApprovals/${userId}`);
     sessionManager.loginAttemptListener.on('child_added', (snapshot) => {
         const approval = snapshot.val();
+        const approvalId = snapshot.key;
+        
+        console.log('Nueva solicitud de aprobación detectada:', approval);
+        
         if (approval && approval.status === 'pending') {
-            showDeviceApprovalModal(approval, snapshot.key, userId);
+            // Verificar que no sea una solicitud antigua (últimos 5 minutos)
+            const requestTime = approval.timestamp;
+            const now = Date.now();
+            const fiveMinutesAgo = now - (5 * 60 * 1000);
+            
+            if (requestTime > fiveMinutesAgo) {
+                console.log('Mostrando modal de aprobación para solicitud reciente');
+                showDeviceApprovalModal(approval, approvalId, userId);
+            } else {
+                console.log('Solicitud demasiado antigua, ignorando');
+            }
         }
     });
+
+    // Listener adicional para flag de solicitud pendiente
+    database.ref(`users/${userId}/pendingLoginApproval`).on('value', (snapshot) => {
+        const pendingApproval = snapshot.val();
+        if (pendingApproval && pendingApproval.requestId) {
+            console.log('Solicitud pendiente detectada via flag de usuario:', pendingApproval);
+            
+            // Verificar si es reciente
+            if (Date.now() - pendingApproval.timestamp < 300000) { // 5 minutos
+                // Buscar la solicitud completa
+                database.ref(`loginApprovals/${userId}/${pendingApproval.requestId}`).once('value')
+                    .then(approvalSnapshot => {
+                        if (approvalSnapshot.exists()) {
+                            const approval = approvalSnapshot.val();
+                            if (approval.status === 'pending') {
+                                showDeviceApprovalModal(approval, pendingApproval.requestId, userId);
+                            }
+                        }
+                    });
+            }
+        }
+    });
+
+    console.log('Listeners de aprobación configurados correctamente');
 }
 
 // Función para mostrar pantalla completa de aprobación de dispositivo
@@ -1581,42 +1693,100 @@ function startApprovalCountdown(seconds, approvalId, userId) {
 
 // Función para aprobar acceso de dispositivo
 function approveDeviceAccess(approvalId, userId) {
-    // Simular aprobación sin Firebase
-    console.log('Acceso aprobado');
-    closeDeviceApprovalModal();
-
-    // Mostrar mensaje de confirmación en pantalla completa
-    showFullScreenMessage('✅ Acceso Aprobado', 
-        'El nuevo dispositivo ahora puede acceder a tu cuenta y mensajes.', 
-        'success');
+    console.log('Aprobando acceso del dispositivo:', approvalId);
+    
+    // Actualizar estado de la solicitud en Firebase
+    database.ref(`loginApprovals/${userId}/${approvalId}/status`).set('approved')
+        .then(() => {
+            console.log('Aprobación registrada en Firebase');
+            
+            // Actualizar flag global para notificar al dispositivo solicitante
+            database.ref(`globalApprovals/${approvalId}`).set({
+                status: 'approved',
+                approvedBy: currentUser.uid,
+                approvedAt: Date.now(),
+                approvalId: approvalId
+            });
+            
+            // Cerrar modal inmediatamente
+            closeDeviceApprovalModal();
+            
+            // Mostrar confirmación breve
+            showInstantNotification('✅ Dispositivo aprobado - Acceso concedido', 'friend-request');
+            
+            console.log('Dispositivo aprobado exitosamente');
+        })
+        .catch(error => {
+            console.error('Error aprobando dispositivo:', error);
+            showErrorMessage('Error aprobando dispositivo. Intenta de nuevo.');
+        });
 }
 
 // Función para denegar acceso de dispositivo
 function denyDeviceAccess(approvalId, userId) {
-    // Simular denegación sin Firebase
-    console.log('Acceso denegado');
-    closeDeviceApprovalModal();
-
-    // Mostrar mensaje de confirmación en pantalla completa
-    showFullScreenMessage('🛡️ Acceso Denegado', 
-        'El dispositivo ha sido bloqueado por 10 minutos. Tu cuenta está protegida.', 
-        'denied');
+    console.log('Denegando acceso del dispositivo:', approvalId);
+    
+    // Actualizar estado de la solicitud en Firebase
+    database.ref(`loginApprovals/${userId}/${approvalId}/status`).set('denied')
+        .then(() => {
+            console.log('Denegación registrada en Firebase');
+            
+            // Actualizar flag global para notificar al dispositivo solicitante
+            database.ref(`globalApprovals/${approvalId}`).set({
+                status: 'denied',
+                deniedBy: currentUser.uid,
+                deniedAt: Date.now(),
+                approvalId: approvalId
+            });
+            
+            // Cerrar modal inmediatamente
+            closeDeviceApprovalModal();
+            
+            // Mostrar confirmación breve
+            showInstantNotification('🛡️ Dispositivo bloqueado - Acceso denegado', 'friend-request');
+            
+            console.log('Dispositivo denegado exitosamente');
+        })
+        .catch(error => {
+            console.error('Error denegando dispositivo:', error);
+            showErrorMessage('Error procesando denegación. Intenta de nuevo.');
+        });
 }
 
 // Función para cerrar pantalla de aprobación
 function closeDeviceApprovalModal() {
+    console.log('Cerrando modal de aprobación de dispositivo');
+    
+    // Limpiar timer de countdown
     if (approvalTimeout) {
         clearInterval(approvalTimeout);
         approvalTimeout = null;
     }
 
+    // Remover modal del DOM
     if (deviceApprovalModal) {
-        document.body.removeChild(deviceApprovalModal);
-        deviceApprovalModal = null;
-
-        // Restaurar pantalla anterior
-        switchScreen(currentScreen);
+        // Animar salida
+        deviceApprovalModal.style.opacity = '0';
+        deviceApprovalModal.style.transform = 'scale(0.95)';
+        
+        setTimeout(() => {
+            if (deviceApprovalModal && deviceApprovalModal.parentNode) {
+                document.body.removeChild(deviceApprovalModal);
+            }
+            deviceApprovalModal = null;
+        }, 200);
     }
+
+    // Restaurar pantalla anterior
+    setTimeout(() => {
+        if (currentScreen === 'device-approval') {
+            switchScreen('chat-list');
+        } else {
+            switchScreen(currentScreen);
+        }
+    }, 250);
+    
+    console.log('Modal de aprobación cerrado correctamente');
 }
 
 // Variables globales para configuraciones de privacidad
