@@ -2801,6 +2801,7 @@ function requestNotificationPermission() {
     
     // Animar botón
     const btn = event.target;
+    const originalHTML = btn.innerHTML;
     btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Activando...';
     btn.disabled = true;
     
@@ -2811,6 +2812,10 @@ function requestNotificationPermission() {
                 permissionsGranted.notifications = true;
                 console.log('Permisos de notificación concedidos');
                 
+                // Actualizar botón con éxito
+                btn.innerHTML = '<i class="fas fa-check"></i> Activado';
+                btn.style.background = '#00a854';
+                
                 // Mostrar notificación de prueba
                 showTestNotification();
                 
@@ -2819,15 +2824,27 @@ function requestNotificationPermission() {
                 }, 2000);
             } else {
                 console.log('Permisos de notificación denegados');
+                btn.innerHTML = '<i class="fas fa-times"></i> Denegado';
+                btn.style.background = '#e74c3c';
                 showPermissionDeniedMessage('notificaciones');
                 setTimeout(() => {
                     nextTutorialStep();
                 }, 3000);
             }
+        }).catch(error => {
+            console.error('Error solicitando permisos:', error);
+            btn.innerHTML = originalHTML;
+            btn.disabled = false;
+            permissionsGranted.notifications = true;
+            setTimeout(() => {
+                nextTutorialStep();
+            }, 1500);
         });
     } else {
         // Fallback para navegadores que no soportan notificaciones
         console.log('Navegador no soporta notificaciones, continuando...');
+        btn.innerHTML = '<i class="fas fa-check"></i> Activado';
+        btn.style.background = '#00a854';
         permissionsGranted.notifications = true;
         setTimeout(() => {
             nextTutorialStep();
@@ -2840,6 +2857,7 @@ function requestContactsPermission() {
     
     // Animar botón
     const btn = event.target;
+    const originalHTML = btn.innerHTML;
     btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Sincronizando...';
     btn.disabled = true;
     
@@ -2848,13 +2866,17 @@ function requestContactsPermission() {
         permissionsGranted.contacts = true;
         console.log('Acceso a contactos simulado como concedido');
         
+        // Actualizar botón con éxito
+        btn.innerHTML = '<i class="fas fa-check"></i> Sincronizado';
+        btn.style.background = '#00a854';
+        
         // Mostrar animación de sincronización
         showContactSyncAnimation();
         
         setTimeout(() => {
             nextTutorialStep();
-        }, 3000);
-    }, 2000);
+        }, 2000);
+    }, 1500);
 }
 
 function nextTutorialStep() {
