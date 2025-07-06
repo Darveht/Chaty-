@@ -65,8 +65,8 @@
             </div>
 
             <!-- Modal de selección de países -->
-            <div id="country-modal" class="country-modal">
-                <div class="country-modal-content">
+            <div id="country-modal" class="country-modal" onclick="closeCountryModal()">
+                <div class="country-modal-content" onclick="event.stopPropagation()">
                     <div class="country-modal-header">
                         <button class="modal-close-btn" onclick="closeCountryModal()">
                             <i class="fas fa-times"></i>
@@ -85,7 +85,6 @@
                         <!-- Los países se cargarán dinámicamente -->
                     </div>
                 </div>
-                <div class="modal-backdrop" onclick="closeCountryModal()"></div>
             </div>
             <div id="recaptcha-container"></div>
             <button class="primary-btn" onclick="sendVerificationCode()" id="send-code-btn" disabled>

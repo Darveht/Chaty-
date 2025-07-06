@@ -240,13 +240,23 @@ function openCountryModal() {
     loadCountriesList();
     
     // Mostrar modal con animación
-    modal.classList.add('show');
+    modal.style.display = 'flex';
     btn.classList.add('active');
+    
+    // Forzar reflow para que la animación funcione
+    modal.offsetHeight;
+    
+    modal.classList.add('show');
     
     // Enfocar en la búsqueda
     setTimeout(() => {
-        document.getElementById('country-search').focus();
+        const searchInput = document.getElementById('country-search');
+        if (searchInput) {
+            searchInput.focus();
+        }
     }, 300);
+    
+    console.log('Modal de países abierto');
 }
 
 function closeCountryModal() {
@@ -256,9 +266,19 @@ function closeCountryModal() {
     modal.classList.remove('show');
     btn.classList.remove('active');
     
+    // Ocultar modal después de la animación
+    setTimeout(() => {
+        modal.style.display = 'none';
+    }, 300);
+    
     // Limpiar búsqueda
-    document.getElementById('country-search').value = '';
-    filterCountries();
+    const searchInput = document.getElementById('country-search');
+    if (searchInput) {
+        searchInput.value = '';
+        filterCountries();
+    }
+    
+    console.log('Modal de países cerrado');
 }
 
 function loadCountriesList() {
