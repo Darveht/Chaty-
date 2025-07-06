@@ -5766,18 +5766,36 @@ This CSS snippet adds styles for image upload progress indication.
     color: var(--text-secondary);
 }
 
-/* Pantalla de Momentos */
+/* Pantalla de Momentos con estilo Uber */
 .moments-header {
     display: flex;
     justify-content: space-between;
     align-items: center;
     padding: 1rem 1.5rem;
-    background: linear-gradient(135deg, var(--primary-color), #333);
+    background: linear-gradient(135deg, #000000, #1a1a1a, #000000);
     color: white;
     position: sticky;
     top: 0;
     z-index: 100;
-    box-shadow: 0 2px 20px rgba(0, 0, 0, 0.2);
+    box-shadow: 0 4px 30px rgba(0, 0, 0, 0.3);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+    backdrop-filter: blur(10px);
+}
+
+.moments-header::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 2px;
+    background: linear-gradient(90deg, transparent, #ffffff, transparent);
+    animation: shimmer 3s infinite;
+}
+
+@keyframes shimmer {
+    0%, 100% { opacity: 0; }
+    50% { opacity: 1; }
 }
 
 .moments-header h2 {
@@ -5815,6 +5833,66 @@ This CSS snippet adds styles for image upload progress indication.
     min-height: calc(100vh - 140px);
 }
 
+/* Loader estilo Uber */
+.loading-moments.uber-style {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    height: 60vh;
+    text-align: center;
+    background: linear-gradient(135deg, #f8f9fa, #ffffff);
+    border-radius: 20px;
+    margin: 2rem;
+    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.1);
+}
+
+.uber-loader {
+    display: flex;
+    gap: 0.5rem;
+    margin-bottom: 2rem;
+}
+
+.loader-circle {
+    width: 12px;
+    height: 12px;
+    background: linear-gradient(45deg, #000000, #333333);
+    border-radius: 50%;
+    animation: uberBounce 1.4s infinite ease-in-out;
+}
+
+.loader-circle:nth-child(1) { animation-delay: -0.32s; }
+.loader-circle:nth-child(2) { animation-delay: -0.16s; }
+.loader-circle:nth-child(3) { animation-delay: 0s; }
+
+@keyframes uberBounce {
+    0%, 80%, 100% {
+        transform: scale(0.8);
+        opacity: 0.5;
+    }
+    40% {
+        transform: scale(1.2);
+        opacity: 1;
+    }
+}
+
+.loading-moments.uber-style h3 {
+    font-size: 1.5rem;
+    font-weight: 700;
+    color: var(--text-primary);
+    margin-bottom: 0.5rem;
+    background: linear-gradient(45deg, #000000, #333333);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+}
+
+.loading-moments.uber-style p {
+    color: var(--text-secondary);
+    font-size: 1rem;
+    margin: 0;
+}
+
 .empty-moments {
     display: flex;
     flex-direction: column;
@@ -5824,6 +5902,158 @@ This CSS snippet adds styles for image upload progress indication.
     text-align: center;
     color: var(--text-secondary);
     padding: 2rem;
+    background: linear-gradient(135deg, #f8f9fa, #ffffff);
+    border-radius: 20px;
+    margin: 2rem;
+    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.1);
+}
+
+/* Animaciones de reacciones */
+.reaction-pulse {
+    animation: reactionPulse 0.6s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+}
+
+@keyframes reactionPulse {
+    0% { transform: scale(1); }
+    50% { transform: scale(1.3); }
+    100% { transform: scale(1); }
+}
+
+.floating-reaction {
+    animation: floatUp 2s ease-out forwards;
+}
+
+@keyframes floatUp {
+    0% {
+        opacity: 1;
+        transform: translateY(0) scale(1) rotate(0deg);
+    }
+    100% {
+        opacity: 0;
+        transform: translateY(-100px) scale(1.5) rotate(360deg);
+    }
+}
+
+.counter-update {
+    animation: counterBounce 0.3s ease-out;
+}
+
+@keyframes counterBounce {
+    0% { transform: scale(1); }
+    50% { transform: scale(1.2); }
+    100% { transform: scale(1); }
+}
+
+/* Notificación de nuevo momento */
+.new-moment-notification {
+    position: fixed;
+    top: 1rem;
+    left: 50%;
+    transform: translateX(-50%) translateY(-100px);
+    background: linear-gradient(135deg, #000000, #333333);
+    color: white;
+    padding: 1rem 1.5rem;
+    border-radius: 25px;
+    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.3);
+    z-index: 10000;
+    opacity: 0;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    backdrop-filter: blur(10px);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.new-moment-notification.show {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0);
+}
+
+.notification-content {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+}
+
+.notification-content img {
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    object-fit: cover;
+    border: 2px solid rgba(255, 255, 255, 0.3);
+}
+
+.notification-text {
+    font-size: 0.9rem;
+    font-weight: 600;
+}
+
+/* Mejoras en botones de reacción */
+.moment-action-btn {
+    position: relative;
+    overflow: hidden;
+}
+
+.moment-action-btn::before {
+    content: '';
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 0;
+    height: 0;
+    background: rgba(0, 0, 0, 0.1);
+    border-radius: 50%;
+    transform: translate(-50%, -50%);
+    transition: width 0.3s ease, height 0.3s ease;
+}
+
+.moment-action-btn:hover::before {
+    width: 100%;
+    height: 100%;
+}
+
+.moment-action-btn.reacted {
+    background: linear-gradient(135deg, rgba(0, 0, 0, 0.1), rgba(51, 51, 51, 0.1));
+    color: var(--primary-color);
+    transform: scale(1.05);
+}
+
+/* Efectos de hover mejorados para momentos */
+.moment-item {
+    position: relative;
+    overflow: hidden;
+}
+
+.moment-item::before {
+    content: '';
+    position: absolute;
+    top: -50%;
+    left: -50%;
+    width: 200%;
+    height: 200%;
+    background: linear-gradient(45deg, transparent, rgba(255, 255, 255, 0.1), transparent);
+    transform: rotate(45deg);
+    transition: transform 0.6s ease;
+    opacity: 0;
+}
+
+.moment-item:hover::before {
+    transform: rotate(45deg) translate(50%, 50%);
+    opacity: 1;
+}
+
+/* Animación de entrada para momentos */
+.moment-item {
+    animation: momentEnter 0.6s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+}
+
+@keyframes momentEnter {
+    0% {
+        opacity: 0;
+        transform: translateY(50px) scale(0.9);
+    }
+    100% {
+        opacity: 1;
+        transform: translateY(0) scale(1);
+    }
 }
 
 .empty-moments-icon {
@@ -5867,15 +6097,337 @@ This CSS snippet adds styles for image upload progress indication.
     line-height: 1.5;
 }
 
-/* Momento individual en la lista */
-.moment-item {
+/* Momento individual estilo Uber */
+.moment-item.uber-moment {
     background: var(--background);
-    border-radius: 20px;
-    margin-bottom: 1.5rem;
+    border-radius: 24px;
+    margin-bottom: 2rem;
     overflow: hidden;
-    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+    box-shadow: 0 12px 48px rgba(0, 0, 0, 0.1);
+    transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+    animation: momentEnter 0.6s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+    border: 1px solid rgba(0, 0, 0, 0.08);
+    position: relative;
+}
+
+.moment-item.uber-moment:hover {
+    transform: translateY(-8px) scale(1.02);
+    box-shadow: 0 20px 64px rgba(0, 0, 0, 0.15);
+}
+
+/* Header del momento mejorado */
+.moment-header {
+    display: flex;
+    align-items: center;
+    padding: 1.25rem;
+    border-bottom: 1px solid rgba(0, 0, 0, 0.06);
+    background: linear-gradient(135deg, rgba(255, 255, 255, 0.9), rgba(248, 249, 250, 0.9));
+}
+
+.moment-avatar-container {
+    position: relative;
+    margin-right: 1rem;
+}
+
+.moment-avatar {
+    width: 50px;
+    height: 50px;
+    border-radius: 50%;
+    object-fit: cover;
+    border: 3px solid transparent;
+    background: linear-gradient(45deg, var(--primary-color), #333);
+    background-clip: padding-box;
+    position: relative;
+}
+
+.avatar-ring {
+    position: absolute;
+    top: -3px;
+    left: -3px;
+    right: -3px;
+    bottom: -3px;
+    border-radius: 50%;
+    background: linear-gradient(45deg, var(--primary-color), #333, var(--primary-color));
+    z-index: -1;
+    animation: avatarRing 3s linear infinite;
+}
+
+@keyframes avatarRing {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+}
+
+.my-moment-badge {
+    position: absolute;
+    top: -5px;
+    right: -5px;
+    width: 20px;
+    height: 20px;
+    background: linear-gradient(45deg, #000000, #333);
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.7rem;
+    border: 2px solid white;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+}
+
+.moment-author-info {
+    flex: 1;
+}
+
+.moment-author-name {
+    font-weight: 700;
+    font-size: 1.1rem;
+    color: var(--text-primary);
+    margin-bottom: 0.25rem;
+    background: linear-gradient(45deg, var(--text-primary), #666);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+}
+
+.moment-timestamp {
+    font-size: 0.85rem;
+    color: var(--text-secondary);
+    display: flex;
+    align-items: center;
+    gap: 0.25rem;
+}
+
+.moment-menu {
+    position: relative;
+}
+
+.moment-menu-btn {
+    background: none;
+    border: none;
+    color: var(--text-secondary);
+    cursor: pointer;
+    padding: 0.5rem;
+    border-radius: 50%;
+    transition: all 0.3s ease;
+}
+
+.moment-menu-btn:hover {
+    background: rgba(0, 0, 0, 0.1);
+    color: var(--text-primary);
+    transform: scale(1.1);
+}
+
+/* Contenido del momento mejorado */
+.moment-image-container {
+    position: relative;
+    overflow: hidden;
+    border-radius: 0;
+}
+
+.moment-image {
+    width: 100%;
+    max-height: 500px;
+    object-fit: cover;
+    transition: transform 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.image-overlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.3);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    opacity: 0;
+    transition: opacity 0.3s ease;
+    cursor: pointer;
+}
+
+.moment-image-container:hover .image-overlay {
+    opacity: 1;
+}
+
+.image-overlay i {
+    color: white;
+    font-size: 2rem;
+    text-shadow: 0 2px 8px rgba(0, 0, 0, 0.5);
+}
+
+.moment-text {
+    padding: 1.25rem;
+    font-size: 1.1rem;
+    line-height: 1.6;
+    color: var(--text-primary);
+    background: linear-gradient(135deg, rgba(255, 255, 255, 0.9), rgba(248, 249, 250, 0.9));
+}
+
+/* Estadísticas del momento */
+.moment-stats {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0.75rem 1.25rem;
+    border-bottom: 1px solid rgba(0, 0, 0, 0.06);
+    background: rgba(248, 249, 250, 0.5);
+}
+
+.reaction-summary {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.reaction-icons {
+    display: flex;
+    align-items: center;
+    gap: 0.25rem;
+}
+
+.reaction-emoji {
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    background: white;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.8rem;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    border: 1px solid rgba(0, 0, 0, 0.1);
+}
+
+.reaction-count {
+    font-size: 0.9rem;
+    font-weight: 600;
+    color: var(--text-secondary);
+    margin-left: 0.25rem;
+}
+
+.comments-preview {
+    font-size: 0.9rem;
+    color: var(--text-secondary);
+    cursor: pointer;
+    transition: color 0.3s ease;
+}
+
+.comments-preview:hover {
+    color: var(--primary-color);
+}
+
+/* Acciones del momento mejoradas */
+.moment-actions {
+    display: flex;
+    justify-content: space-around;
+    padding: 1rem;
+    background: rgba(248, 249, 250, 0.7);
+    border-radius: 0 0 24px 24px;
+}
+
+.moment-action-btn {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.25rem;
+    background: none;
+    border: none;
+    color: var(--text-secondary);
+    font-weight: 600;
+    cursor: pointer;
+    padding: 0.75rem 1rem;
+    border-radius: 16px;
     transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-    animation: momentSlideIn 0.6s ease-out;
+    font-size: 0.85rem;
+    min-width: 80px;
+    position: relative;
+    overflow: hidden;
+}
+
+.moment-action-btn::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: -100%;
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(90deg, transparent, rgba(0, 0, 0, 0.1), transparent);
+    transition: left 0.5s ease;
+}
+
+.moment-action-btn:hover::before {
+    left: 100%;
+}
+
+.moment-action-btn:hover {
+    background: rgba(0, 0, 0, 0.05);
+    color: var(--primary-color);
+    transform: translateY(-2px) scale(1.05);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+}
+
+.moment-action-btn.reacted {
+    color: var(--primary-color);
+    background: rgba(0, 0, 0, 0.05);
+    transform: scale(1.02);
+}
+
+.moment-action-btn i {
+    font-size: 1.2rem;
+    transition: transform 0.2s ease;
+}
+
+.moment-action-btn:hover i {
+    transform: scale(1.1);
+}
+
+.action-text {
+    font-size: 0.75rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.has-reactions {
+    color: var(--primary-color) !important;
+    font-weight: 700;
+}
+
+/* Preview de reacciones en tiempo real */
+.moment-reactions-preview {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    height: 40px;
+    overflow: hidden;
+    pointer-events: none;
+}
+
+/* Responsive para momentos */
+@media (max-width: 768px) {
+    .moment-item.uber-moment {
+        margin-bottom: 1.5rem;
+        border-radius: 20px;
+    }
+    
+    .moment-header {
+        padding: 1rem;
+    }
+    
+    .moment-actions {
+        padding: 0.75rem;
+    }
+    
+    .moment-action-btn {
+        padding: 0.5rem;
+        min-width: 60px;
+        font-size: 0.8rem;
+    }
+    
+    .action-text {
+        display: none;
+    }
 }
 
 .moment-item:hover {

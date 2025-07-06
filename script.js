@@ -2502,18 +2502,23 @@ function toggleCallNotifications(toggle) {
 // SISTEMA DE MOMENTOS
 // ================================
 
-// Función para cargar momentos desde Firebase
+// Función para cargar momentos desde Firebase con animaciones mejoradas
 function loadMoments() {
     if (!currentUser || !currentUser.uid) return;
     
-    console.log('Cargando momentos...');
+    console.log('🎬 Cargando momentos...');
     const momentsContainer = document.getElementById('moments-container');
     
-    // Mostrar indicador de carga
+    // Mostrar indicador de carga animado estilo Uber
     momentsContainer.innerHTML = `
-        <div class="loading-moments">
-            <i class="fas fa-spinner fa-spin"></i>
-            <p>Cargando momentos...</p>
+        <div class="loading-moments uber-style">
+            <div class="uber-loader">
+                <div class="loader-circle"></div>
+                <div class="loader-circle"></div>
+                <div class="loader-circle"></div>
+            </div>
+            <h3>Cargando momentos increíbles...</h3>
+            <p>✨ Preparando experiencias únicas</p>
         </div>
     `;
     
@@ -2524,6 +2529,7 @@ function loadMoments() {
     
     momentsListener = database.ref('moments').orderByChild('timestamp').limitToLast(50);
     
+    // Listener para momentos existentes
     momentsListener.on('value', (snapshot) => {
         const momentsData = snapshot.val() || {};
         const momentsList = Object.keys(momentsData).map(key => ({
@@ -2537,6 +2543,23 @@ function loadMoments() {
             displayMoments(momentsList);
         }
     });
+    
+    // Listener para nuevos momentos en tiempo real
+    momentsListener.on('child_added', (snapshot) => {
+        const newMoment = {
+            id: snapshot.key,
+            ...snapshot.val()
+        };
+        
+        // Animación de nuevo momento
+        showNewMomentAnimation(newMoment);
+        
+        // Reproducir sonido de notificación
+        playMomentNotificationSound();
+    });
+    
+    // Listener para reacciones en tiempo real
+    setupRealtimeReactions();
 }
 
 // Función para mostrar estado vacío de momentos
@@ -2557,44 +2580,140 @@ function showEmptyMoments() {
     `;
 }
 
-// Función para mostrar lista de momentos
+// Función para mostrar lista de momentos con animaciones mejoradas
 function displayMoments(momentsList) {
     const momentsContainer = document.getElementById('moments-container');
     
-    momentsContainer.innerHTML = momentsList.map(moment => {
+    momentsContainer.innerHTML = momentsList.map((moment, index) => {
         const timeAgo = getTimeAgo(moment.timestamp);
         const avatarUrl = moment.authorAvatar || `https://api.dicebear.com/7.x/avataaars/svg?seed=${moment.authorId}`;
+        const isMyMoment = moment.authorId === currentUser.uid;
         
         return `
-            <div class="moment-item" style="animation-delay: ${Math.random() * 0.5}s">
+            <div class="moment-item uber-moment" data-moment-id="${moment.id}" style="animation-delay: ${index * 0.1}s">
                 <div class="moment-header">
-                    <img class="moment-avatar" src="${avatarUrl}" alt="${moment.authorName}">
+                    <div class="moment-avatar-container">
+                        <img class="moment-avatar" src="${avatarUrl}" alt="${moment.authorName}">
+                        <div class="avatar-ring"></div>
+                        ${isMyMoment ? '<div class="my-moment-badge">📸</div>' : ''}
+                    </div>
                     <div class="moment-author-info">
                         <div class="moment-author-name">${moment.authorName}</div>
-                        <div class="moment-timestamp">${timeAgo}</div>
+                        <div class="moment-timestamp">
+                            <i class="fas fa-clock"></i>
+                            ${timeAgo}
+                        </div>
+                    </div>
+                    <div class="moment-menu">
+                        <button class="moment-menu-btn" onclick="showMomentMenu('${moment.id}')">
+                            <i class="fas fa-ellipsis-h"></i>
+                        </button>
                     </div>
                 </div>
                 <div class="moment-content" onclick="viewMoment('${moment.id}')">
-                    ${moment.imageUrl ? `<img class="moment-image" src="${moment.imageUrl}" alt="Momento">` : ''}
+                    ${moment.imageUrl ? `
+                        <div class="moment-image-container">
+                            <img class="moment-image" src="${moment.imageUrl}" alt="Momento" loading="lazy">
+                            <div class="image-overlay">
+                                <i class="fas fa-expand"></i>
+                            </div>
+                        </div>
+                    ` : ''}
                     ${moment.text ? `<div class="moment-text">${moment.text}</div>` : ''}
                 </div>
+                <div class="moment-stats">
+                    <div class="reaction-summary">
+                        ${(moment.reactions?.like?.length || 0) + (moment.reactions?.laugh?.length || 0) > 0 ? 
+                            `<div class="reaction-icons">
+                                ${moment.reactions?.like?.length > 0 ? '<span class="reaction-emoji">❤️</span>' : ''}
+                                ${moment.reactions?.laugh?.length > 0 ? '<span class="reaction-emoji">😂</span>' : ''}
+                                <span class="reaction-count">${(moment.reactions?.like?.length || 0) + (moment.reactions?.laugh?.length || 0)}</span>
+                            </div>` : ''
+                        }
+                    </div>
+                    <div class="comments-preview">
+                        ${moment.commentsCount > 0 ? `<span>${moment.commentsCount} comentario${moment.commentsCount !== 1 ? 's' : ''}</span>` : ''}
+                    </div>
+                </div>
                 <div class="moment-actions">
-                    <button class="moment-action-btn ${moment.reactions?.like?.includes(currentUser.uid) ? 'reacted' : ''}" onclick="reactToMoment('${moment.id}', 'like')">
+                    <button class="moment-action-btn reaction-like ${moment.reactions?.like?.includes(currentUser.uid) ? 'reacted' : ''}" onclick="reactToMoment('${moment.id}', 'like')">
                         <i class="fas fa-heart"></i>
-                        <span>${moment.reactions?.like?.length || 0}</span>
+                        <span class="like-count">${moment.reactions?.like?.length || 0}</span>
+                        <span class="action-text">Me gusta</span>
                     </button>
-                    <button class="moment-action-btn ${moment.reactions?.laugh?.includes(currentUser.uid) ? 'reacted' : ''}" onclick="reactToMoment('${moment.id}', 'laugh')">
+                    <button class="moment-action-btn reaction-laugh ${moment.reactions?.laugh?.includes(currentUser.uid) ? 'reacted' : ''}" onclick="reactToMoment('${moment.id}', 'laugh')">
                         <i class="fas fa-laugh"></i>
-                        <span>${moment.reactions?.laugh?.length || 0}</span>
+                        <span class="laugh-count">${moment.reactions?.laugh?.length || 0}</span>
+                        <span class="action-text">Divertido</span>
                     </button>
                     <button class="moment-action-btn" onclick="viewMoment('${moment.id}')">
                         <i class="fas fa-comment"></i>
                         <span>${moment.commentsCount || 0}</span>
+                        <span class="action-text">Comentar</span>
+                    </button>
+                    <button class="moment-action-btn" onclick="shareMoment('${moment.id}')">
+                        <i class="fas fa-share"></i>
+                        <span class="action-text">Compartir</span>
                     </button>
                 </div>
+                <div class="moment-reactions-preview" id="reactions-${moment.id}"></div>
             </div>
         `;
     }).join('');
+    
+    // Configurar listeners de reacciones en tiempo real para cada momento
+    momentsList.forEach(moment => {
+        setupMomentRealtimeListeners(moment.id);
+    });
+}
+
+// Función para configurar listeners en tiempo real por momento
+function setupMomentRealtimeListeners(momentId) {
+    database.ref(`moments/${momentId}/reactions`).on('value', (snapshot) => {
+        const reactions = snapshot.val() || {};
+        updateReactionsDisplay(momentId, reactions);
+    });
+    
+    database.ref(`moments/${momentId}/commentsCount`).on('value', (snapshot) => {
+        const count = snapshot.val() || 0;
+        updateCommentsCount(momentId, count);
+    });
+}
+
+// Función para actualizar display de reacciones
+function updateReactionsDisplay(momentId, reactions) {
+    const likeCount = reactions.like?.length || 0;
+    const laughCount = reactions.laugh?.length || 0;
+    
+    // Actualizar contadores
+    const likeCountElement = document.querySelector(`[data-moment-id="${momentId}"] .like-count`);
+    const laughCountElement = document.querySelector(`[data-moment-id="${momentId}"] .laugh-count`);
+    
+    if (likeCountElement) {
+        likeCountElement.textContent = likeCount;
+        if (likeCount > 0) likeCountElement.classList.add('has-reactions');
+    }
+    
+    if (laughCountElement) {
+        laughCountElement.textContent = laughCount;
+        if (laughCount > 0) laughCountElement.classList.add('has-reactions');
+    }
+    
+    // Actualizar botones de reacción
+    const likeBtn = document.querySelector(`[data-moment-id="${momentId}"] .reaction-like`);
+    const laughBtn = document.querySelector(`[data-moment-id="${momentId}"] .reaction-laugh`);
+    
+    if (reactions.like?.includes(currentUser.uid)) {
+        likeBtn?.classList.add('reacted');
+    } else {
+        likeBtn?.classList.remove('reacted');
+    }
+    
+    if (reactions.laugh?.includes(currentUser.uid)) {
+        laughBtn?.classList.add('reacted');
+    } else {
+        laughBtn?.classList.remove('reacted');
+    }
 }
 
 // Función para mostrar modal de crear momento
@@ -2715,11 +2834,11 @@ async function publishMoment() {
     }
 }
 
-// Función para reaccionar a un momento
+// Función para reaccionar a un momento con animaciones
 function reactToMoment(momentId, reactionType) {
     if (!currentUser || !momentId) return;
     
-    console.log(`Reaccionando al momento ${momentId} con ${reactionType}`);
+    console.log(`💫 Reaccionando al momento ${momentId} con ${reactionType}`);
     
     const momentRef = database.ref(`moments/${momentId}/reactions/${reactionType}`);
     
@@ -2727,20 +2846,175 @@ function reactToMoment(momentId, reactionType) {
         let reactions = snapshot.val() || [];
         const userIndex = reactions.indexOf(currentUser.uid);
         
+        // Animación inmediata en la UI
+        const reactionBtn = document.querySelector(`[data-moment-id="${momentId}"] .reaction-${reactionType}`);
+        if (reactionBtn) {
+            reactionBtn.classList.add('reaction-pulse');
+            setTimeout(() => reactionBtn.classList.remove('reaction-pulse'), 600);
+        }
+        
         if (userIndex > -1) {
-            // Quitar reacción
+            // Quitar reacción con animación de salida
             reactions.splice(userIndex, 1);
+            createReactionAnimation(momentId, reactionType, 'remove');
         } else {
-            // Agregar reacción
+            // Agregar reacción con animación de entrada
             reactions.push(currentUser.uid);
+            createReactionAnimation(momentId, reactionType, 'add');
+            
+            // Enviar notificación al autor del momento
+            sendReactionNotification(momentId, reactionType);
         }
         
         // Actualizar en Firebase
         momentRef.set(reactions).then(() => {
-            console.log('Reacción actualizada');
-            // La UI se actualizará automáticamente por el listener
+            console.log('✅ Reacción actualizada en tiempo real');
+            
+            // Actualizar contador con animación
+            updateReactionCounter(momentId, reactionType, reactions.length);
         });
     });
+}
+
+// Función para crear animaciones de reacciones flotantes
+function createReactionAnimation(momentId, reactionType, action) {
+    const momentElement = document.querySelector(`[data-moment-id="${momentId}"]`);
+    if (!momentElement) return;
+    
+    const reactionIcon = getReactionIcon(reactionType);
+    const animation = document.createElement('div');
+    animation.className = `floating-reaction ${action}`;
+    animation.innerHTML = reactionIcon;
+    
+    // Posición aleatoria
+    const randomX = Math.random() * 100;
+    const randomDelay = Math.random() * 500;
+    
+    animation.style.cssText = `
+        position: absolute;
+        left: ${randomX}%;
+        bottom: 20px;
+        font-size: 1.5rem;
+        z-index: 1000;
+        pointer-events: none;
+        animation: floatUp 2s ease-out forwards;
+        animation-delay: ${randomDelay}ms;
+    `;
+    
+    momentElement.appendChild(animation);
+    
+    // Remover después de la animación
+    setTimeout(() => {
+        if (animation.parentNode) {
+            animation.parentNode.removeChild(animation);
+        }
+    }, 2500);
+}
+
+// Función para obtener icono de reacción
+function getReactionIcon(reactionType) {
+    const icons = {
+        'like': '❤️',
+        'laugh': '😂',
+        'wow': '😮',
+        'love': '😍',
+        'fire': '🔥'
+    };
+    return icons[reactionType] || '👍';
+}
+
+// Función para actualizar contador con animación
+function updateReactionCounter(momentId, reactionType, count) {
+    const counter = document.querySelector(`[data-moment-id="${momentId}"] .${reactionType}-count`);
+    if (counter) {
+        counter.classList.add('counter-update');
+        counter.textContent = count;
+        
+        setTimeout(() => {
+            counter.classList.remove('counter-update');
+        }, 300);
+    }
+}
+
+// Función para configurar reacciones en tiempo real
+function setupRealtimeReactions() {
+    if (!currentUser) return;
+    
+    database.ref('moments').on('child_changed', (snapshot) => {
+        const updatedMoment = snapshot.val();
+        const momentId = snapshot.key;
+        
+        // Actualizar reacciones en tiempo real
+        if (updatedMoment.reactions) {
+            updateReactionsDisplay(momentId, updatedMoment.reactions);
+        }
+        
+        // Actualizar comentarios en tiempo real
+        if (updatedMoment.commentsCount !== undefined) {
+            updateCommentsCount(momentId, updatedMoment.commentsCount);
+        }
+    });
+}
+
+// Función para mostrar nueva animación de momento
+function showNewMomentAnimation(newMoment) {
+    // Crear notificación temporal
+    const notification = document.createElement('div');
+    notification.className = 'new-moment-notification';
+    notification.innerHTML = `
+        <div class="notification-content">
+            <img src="${newMoment.authorAvatar || 'default-avatar.png'}" alt="${newMoment.authorName}">
+            <div class="notification-text">
+                <strong>${newMoment.authorName}</strong> publicó un nuevo momento
+            </div>
+        </div>
+    `;
+    
+    document.body.appendChild(notification);
+    
+    setTimeout(() => {
+        notification.classList.add('show');
+    }, 100);
+    
+    setTimeout(() => {
+        notification.classList.remove('show');
+        setTimeout(() => {
+            if (notification.parentNode) {
+                notification.parentNode.removeChild(notification);
+            }
+        }, 300);
+    }, 3000);
+}
+
+// Función para reproducir sonido de notificación de momento
+function playMomentNotificationSound() {
+    if (!notificationSystem.soundEnabled) return;
+    
+    try {
+        const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+        
+        // Crear secuencia de tonos alegres
+        const frequencies = [523, 659, 784]; // Do, Mi, Sol
+        
+        frequencies.forEach((freq, index) => {
+            setTimeout(() => {
+                const oscillator = audioContext.createOscillator();
+                const gainNode = audioContext.createGain();
+                
+                oscillator.connect(gainNode);
+                gainNode.connect(audioContext.destination);
+                
+                oscillator.frequency.value = freq;
+                gainNode.gain.setValueAtTime(0.1, audioContext.currentTime);
+                gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.2);
+                
+                oscillator.start();
+                oscillator.stop(audioContext.currentTime + 0.2);
+            }, index * 100);
+        });
+    } catch (error) {
+        console.log('Audio no disponible');
+    }
 }
 
 // Función para ver momento completo
