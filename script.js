@@ -2631,10 +2631,10 @@ function checkAuthState() {
                         // Inicializar configuraciones
                         initializeSettings();
                         
-                        // Verificar si necesita tutorial
-                        if (!checkTutorialStatus()) {
+                        // Verificar si necesita tutorial solo si no está ya en tutorial
+                        if (!checkTutorialStatus() && currentScreen !== 'tutorial-notifications' && currentScreen !== 'tutorial-contacts' && currentScreen !== 'tutorial-features') {
                             startTutorial();
-                        } else {
+                        } else if (checkTutorialStatus()) {
                             // Ir directamente a la lista de chats
                             loadUserContacts();
                             switchScreen('chat-list');
@@ -2790,6 +2790,10 @@ let permissionsGranted = {
 function startTutorial() {
     console.log('Iniciando tutorial interactivo...');
     tutorialStep = 1;
+    tutorialCompleted = false;
+    
+    // Asegurar que estamos en la pantalla correcta
+    currentScreen = 'tutorial-notifications';
     switchScreen('tutorial-notifications');
     
     // Agregar efectos de sonido del tutorial
@@ -2822,7 +2826,8 @@ function requestNotificationPermission() {
         // Forzar progreso automático después de 1.5 segundos
         setTimeout(() => {
             console.log('Progresando al siguiente paso del tutorial...');
-            nextTutorialStep();
+            tutorialStep = 2;
+            switchScreen('tutorial-contacts');
         }, 1500);
         
     }, 1000);
@@ -2854,7 +2859,8 @@ function requestContactsPermission() {
         // Forzar progreso automático al siguiente paso
         setTimeout(() => {
             console.log('Progresando al paso final del tutorial...');
-            nextTutorialStep();
+            tutorialStep = 3;
+            switchScreen('tutorial-features');
         }, 1500);
     }, 1000);
 }
@@ -2864,19 +2870,15 @@ function nextTutorialStep() {
     console.log('Tutorial step:', tutorialStep);
     playTutorialSound('next');
     
-    switch(tutorialStep) {
-        case 2:
-            console.log('Cambiando a pantalla de contactos...');
-            switchScreen('tutorial-contacts');
-            break;
-        case 3:
-            console.log('Cambiando a pantalla final...');
-            switchScreen('tutorial-features');
-            break;
-        default:
-            console.log('Completando tutorial...');
-            completeTutorial();
-            break;
+    if (tutorialStep === 2) {
+        console.log('Cambiando a pantalla de contactos...');
+        switchScreen('tutorial-contacts');
+    } else if (tutorialStep === 3) {
+        console.log('Cambiando a pantalla final...');
+        switchScreen('tutorial-features');
+    } else {
+        console.log('Completando tutorial...');
+        completeTutorial();
     }
 }
 
@@ -2889,10 +2891,15 @@ function skipTutorial() {
 function completeTutorial() {
     console.log('Tutorial completado');
     tutorialCompleted = true;
+    tutorialStep = 0; // Resetear paso del tutorial
     playTutorialSound('complete');
+    
+    // Guardar estado del tutorial primero
+    localStorage.setItem('uberchat_tutorial_completed', 'true');
     
     // Cargar contactos y mostrar pantalla principal
     loadUserContacts();
+    currentScreen = 'chat-list';
     switchScreen('chat-list');
     
     // Mostrar mensaje de bienvenida personalizado
@@ -2903,9 +2910,6 @@ function completeTutorial() {
     setTimeout(() => {
         showInstantNotification(welcomeMessage, 'friend-request');
     }, 1000);
-    
-    // Guardar estado del tutorial
-    localStorage.setItem('uberchat_tutorial_completed', 'true');
 }
 
 function showTestNotification() {
