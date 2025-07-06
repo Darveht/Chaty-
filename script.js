@@ -1519,18 +1519,14 @@ function showSection(section) {
                 showTranslateSection();
                 break;
             case 'moments':
-                console.log('Iniciando carga de momentos...');
+                console.log('Cambiando a momentos...');
                 currentScreen = 'moments';
                 switchScreen('moments');
-                // Usar setTimeout más largo para asegurar que la pantalla esté completamente cargada
+                // Simplificar la carga de momentos
                 setTimeout(() => {
-                    try {
-                        loadMoments();
-                    } catch (error) {
-                        console.error('Error cargando momentos:', error);
-                        showMomentsError();
-                    }
-                }, 200);
+                    console.log('Inicializando momentos...');
+                    initializeMomentsScreen();
+                }, 100);
                 break;
             case 'calls':
                 currentScreen = 'calls-history';
@@ -1558,6 +1554,41 @@ function showSection(section) {
     } catch (error) {
         console.error('Error en showSection:', error);
         showErrorMessage('Error navegando a la sección. Intenta de nuevo.');
+    }
+}
+
+// Nueva función simplificada para inicializar momentos
+function initializeMomentsScreen() {
+    console.log('Inicializando pantalla de momentos...');
+    
+    const momentsContainer = document.getElementById('moments-container');
+    if (!momentsContainer) {
+        console.error('Contenedor de momentos no encontrado');
+        return;
+    }
+    
+    // Mostrar estado inicial
+    momentsContainer.innerHTML = `
+        <div class="empty-moments">
+            <div class="empty-moments-icon">
+                <i class="fas fa-camera-retro"></i>
+            </div>
+            <h3>¡Comparte tu primer momento!</h3>
+            <p>Los momentos te permiten compartir fotos e historias con tus contactos</p>
+            <button class="primary-btn" onclick="showCreateMoment()">
+                <i class="fas fa-plus"></i>
+                Crear Momento
+            </button>
+        </div>
+    `;
+    
+    console.log('Pantalla de momentos inicializada correctamente');
+    
+    // Intentar cargar momentos de Firebase de forma asíncrona
+    if (currentUser && currentUser.uid) {
+        setTimeout(() => {
+            loadMomentsFromFirebase();
+        }, 500);
     }
 }
 
@@ -2557,91 +2588,70 @@ function toggleCallNotifications(toggle) {
 // SISTEMA DE MOMENTOS
 // ================================
 
-// Función para cargar momentos desde Firebase con mejor manejo de errores
-function loadMoments() {
-    console.log('🎬 Iniciando carga de momentos...');
+// Función simplificada para cargar momentos de Firebase
+function loadMomentsFromFirebase() {
+    console.log('Cargando momentos desde Firebase...');
+    
+    if (!currentUser || !currentUser.uid) {
+        console.log('Usuario no disponible para cargar momentos');
+        return;
+    }
     
     const momentsContainer = document.getElementById('moments-container');
     if (!momentsContainer) {
-        console.error('No se encontró el contenedor de momentos');
-        showMomentsError();
+        console.error('Contenedor de momentos no encontrado');
         return;
     }
-    
-    // Verificar usuario actual
-    if (!currentUser || !currentUser.uid) {
-        console.log('Usuario no disponible, mostrando estado vacío');
-        showEmptyMoments();
-        return;
-    }
-    
-    console.log('Usuario actual:', currentUser.uid);
-    
-    // Mostrar indicador de carga
-    showMomentsLoading();
-    
-    // Usar timeout para evitar colgamiento
-    const loadTimeout = setTimeout(() => {
-        console.warn('Timeout cargando momentos, mostrando estado vacío');
-        showEmptyMoments();
-    }, 10000); // 10 segundos timeout
     
     try {
-        // Verificar conexión a Firebase primero
+        // Mostrar loading temporal
+        momentsContainer.innerHTML = `
+            <div class="loading-moments uber-style">
+                <div class="uber-loader">
+                    <div class="loader-circle"></div>
+                    <div class="loader-circle"></div>
+                    <div class="loader-circle"></div>
+                </div>
+                <h3>Cargando momentos...</h3>
+                <p>✨ Preparando contenido</p>
+            </div>
+        `;
+        
+        // Verificar Firebase
         if (typeof database === 'undefined') {
-            console.error('Firebase no está disponible');
-            clearTimeout(loadTimeout);
-            showMomentsOffline();
+            console.error('Firebase no disponible');
+            showEmptyMoments();
             return;
         }
         
-        // Limpiar listener anterior
-        if (momentsListener) {
-            momentsListener.off();
-            momentsListener = null;
-        }
+        // Cargar momentos con timeout
+        const loadPromise = database.ref('moments').orderByChild('timestamp').limitToLast(10).once('value');
+        const timeoutPromise = new Promise((_, reject) => 
+            setTimeout(() => reject(new Error('Timeout')), 5000)
+        );
         
-        // Configurar listener con mejor manejo de errores
-        momentsListener = database.ref('moments').orderByChild('timestamp').limitToLast(20);
-        
-        momentsListener.once('value')
-            .then((snapshot) => {
-                clearTimeout(loadTimeout);
-                console.log('Datos de momentos recibidos:', snapshot.exists());
-                
+        Promise.race([loadPromise, timeoutPromise])
+            .then(snapshot => {
                 const momentsData = snapshot.val() || {};
                 const momentsList = Object.keys(momentsData).map(key => ({
                     id: key,
                     ...momentsData[key]
-                })).reverse(); // Más recientes primero
-                
-                console.log('Momentos encontrados:', momentsList.length);
+                })).reverse();
                 
                 if (momentsList.length === 0) {
                     showEmptyMoments();
                 } else {
                     displayMoments(momentsList);
                 }
-                
-                // Configurar listener en tiempo real después del primer load
-                setTimeout(() => {
-                    try {
-                        setupRealtimeReactions();
-                    } catch (error) {
-                        console.error('Error configurando reacciones en tiempo real:', error);
-                    }
-                }, 1000);
             })
             .catch(error => {
-                clearTimeout(loadTimeout);
                 console.error('Error cargando momentos:', error);
-                showMomentsError();
+                showEmptyMoments();
             });
-        
+            
     } catch (error) {
-        clearTimeout(loadTimeout);
-        console.error('Error configurando listeners de momentos:', error);
-        showMomentsError();
+        console.error('Error en loadMomentsFromFirebase:', error);
+        showEmptyMoments();
     }
 }
 
