@@ -1377,21 +1377,74 @@ function handleAvatarChange(event) {
 
 // Función para obtener token de acceso de Dropbox
 async function getDropboxAccessToken() {
-    // Verificar si ya tenemos un token guardado
+    // Verificar si ya tenemos un token guardado y válido
     const savedToken = localStorage.getItem('dropbox_access_token');
-    if (savedToken && DROPBOX_CONFIG.accessToken) {
-        return DROPBOX_CONFIG.accessToken;
+    const tokenExpiry = localStorage.getItem('dropbox_token_expiry');
+    
+    if (savedToken && tokenExpiry && Date.now() < parseInt(tokenExpiry)) {
+        DROPBOX_CONFIG.accessToken = savedToken;
+        return savedToken;
     }
     
     try {
-        // Usar OAuth 2.0 PKCE flow para obtener token
+        // Verificar si tenemos un código de autorización en la URL actual
+        const urlParams = new URLSearchParams(window.location.search);
+        const authCode = urlParams.get('code');
+        
+        if (authCode) {
+            // Recuperar code_verifier del localStorage
+            const codeVerifier = localStorage.getItem('dropbox_code_verifier');
+            if (!codeVerifier) {
+                throw new Error('Code verifier no encontrado');
+            }
+            
+            // Obtener la URL base sin parámetros
+            const redirectUri = window.location.origin + window.location.pathname;
+            
+            // Intercambiar código por token
+            const tokenData = await exchangeCodeForToken(authCode, codeVerifier, redirectUri);
+            
+            DROPBOX_CONFIG.accessToken = tokenData.access_token;
+            localStorage.setItem('dropbox_access_token', tokenData.access_token);
+            
+            // Calcular tiempo de expiración (por defecto 4 horas si no se especifica)
+            const expiresIn = tokenData.expires_in || 14400; // 4 horas por defecto
+            const expiryTime = Date.now() + (expiresIn * 1000);
+            localStorage.setItem('dropbox_token_expiry', expiryTime.toString());
+            
+            // Limpiar parámetros de la URL
+            window.history.replaceState({}, document.title, window.location.pathname);
+            
+            return tokenData.access_token;
+        } else {
+            // Iniciar flujo OAuth
+            await initiateDropboxOAuth();
+            throw new Error('Autorización de Dropbox requerida');
+        }
+    } catch (error) {
+        console.error('Error obteniendo token de Dropbox:', error);
+        // Limpiar tokens inválidos
+        localStorage.removeItem('dropbox_access_token');
+        localStorage.removeItem('dropbox_token_expiry');
+        localStorage.removeItem('dropbox_code_verifier');
+        throw new Error('No se pudo obtener autorización de Dropbox');
+    }
+}
+
+// Función para iniciar el flujo OAuth de Dropbox
+async function initiateDropboxOAuth() {
+    try {
+        // Generar code verifier y challenge para PKCE
         const codeVerifier = generateCodeVerifier();
         const codeChallenge = await generateCodeChallenge(codeVerifier);
         
         // Guardar code_verifier para uso posterior
         localStorage.setItem('dropbox_code_verifier', codeVerifier);
         
+        // Usar la URL actual como redirect_uri
         const redirectUri = window.location.origin + window.location.pathname;
+        
+        // Crear URL de autorización
         const authUrl = `https://www.dropbox.com/oauth2/authorize?` +
             `client_id=${DROPBOX_CONFIG.appKey}&` +
             `response_type=code&` +
@@ -1400,28 +1453,12 @@ async function getDropboxAccessToken() {
             `redirect_uri=${encodeURIComponent(redirectUri)}&` +
             `token_access_type=offline`;
         
-        // Verificar si tenemos un código de autorización en la URL
-        const urlParams = new URLSearchParams(window.location.search);
-        const authCode = urlParams.get('code');
+        // Mostrar modal de autorización
+        showDropboxAuthModal(authUrl);
         
-        if (authCode) {
-            // Intercambiar código por token
-            const token = await exchangeCodeForToken(authCode, codeVerifier, redirectUri);
-            DROPBOX_CONFIG.accessToken = token;
-            localStorage.setItem('dropbox_access_token', token);
-            
-            // Limpiar URL
-            window.history.replaceState({}, document.title, window.location.pathname);
-            
-            return token;
-        } else {
-            // Redirigir a Dropbox para autorización
-            showDropboxAuthModal(authUrl);
-            throw new Error('Autorización de Dropbox requerida');
-        }
     } catch (error) {
-        console.error('Error obteniendo token de Dropbox:', error);
-        throw new Error('No se pudo obtener autorización de Dropbox');
+        console.error('Error iniciando OAuth de Dropbox:', error);
+        throw error;
     }
 }
 
@@ -1449,27 +1486,34 @@ async function generateCodeChallenge(verifier) {
 // Intercambiar código de autorización por token de acceso
 async function exchangeCodeForToken(authCode, codeVerifier, redirectUri) {
     try {
+        console.log('Intercambiando código por token...');
+        
+        const tokenRequestBody = new URLSearchParams({
+            code: authCode,
+            grant_type: 'authorization_code',
+            client_id: DROPBOX_CONFIG.appKey,
+            code_verifier: codeVerifier,
+            redirect_uri: redirectUri
+        });
+
         const response = await fetch('https://api.dropboxapi.com/oauth2/token', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/x-www-form-urlencoded',
             },
-            body: new URLSearchParams({
-                code: authCode,
-                grant_type: 'authorization_code',
-                client_id: DROPBOX_CONFIG.appKey,
-                code_verifier: codeVerifier,
-                redirect_uri: redirectUri
-            })
+            body: tokenRequestBody
         });
 
         if (!response.ok) {
             const errorText = await response.text();
+            console.error('Error respuesta token:', errorText);
             throw new Error(`Error HTTP ${response.status}: ${errorText}`);
         }
 
-        const data = await response.json();
-        return data.access_token;
+        const tokenData = await response.json();
+        console.log('Token obtenido exitosamente');
+        
+        return tokenData;
     } catch (error) {
         console.error('Error intercambiando código por token:', error);
         throw error;
@@ -1486,18 +1530,35 @@ function showDropboxAuthModal(authUrl) {
                 <div class="auth-icon">
                     <i class="fab fa-dropbox"></i>
                 </div>
-                <h2>Autorización de Dropbox Requerida</h2>
-                <p>Para subir imágenes, necesitas autorizar el acceso a Dropbox</p>
+                <h2>Conectar con Dropbox</h2>
+                <p>Para subir y compartir imágenes, necesitas conectar tu cuenta de Dropbox</p>
+                <div class="auth-benefits">
+                    <div class="benefit-item">
+                        <i class="fas fa-cloud-upload-alt"></i>
+                        <span>Subida rápida y segura</span>
+                    </div>
+                    <div class="benefit-item">
+                        <i class="fas fa-share-alt"></i>
+                        <span>Compartir imágenes fácilmente</span>
+                    </div>
+                    <div class="benefit-item">
+                        <i class="fas fa-shield-alt"></i>
+                        <span>Almacenamiento confiable</span>
+                    </div>
+                </div>
             </div>
             <div class="auth-actions">
                 <button class="secondary-btn" onclick="closeDropboxAuthModal()">
                     <i class="fas fa-times"></i>
-                    Cancelar
+                    Ahora no
                 </button>
                 <button class="primary-btn" onclick="authorizeDropbox('${authUrl}')">
                     <i class="fab fa-dropbox"></i>
-                    Autorizar Dropbox
+                    Conectar Dropbox
                 </button>
+            </div>
+            <div class="auth-note">
+                <small><i class="fas fa-info-circle"></i> Se abrirá una nueva ventana para autorizar el acceso</small>
             </div>
         </div>
     `;
