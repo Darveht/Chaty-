@@ -4183,13 +4183,14 @@ This CSS snippet adds styles for image upload progress indication.
 .tutorial-container {
     display: flex;
     flex-direction: column;
-    height: 100vh;
+    min-height: 100vh;
     background: linear-gradient(135deg, #000000 0%, #1a1a1a 100%);
     color: white;
     padding: 1.5rem;
     text-align: center;
     position: relative;
-    overflow: hidden;
+    overflow-y: auto;
+    overflow-x: hidden;
 }
 
 .tutorial-icon-container {
@@ -4235,30 +4236,25 @@ This CSS snippet adds styles for image upload progress indication.
 }
 
 .tutorial-content h1 {
-    font-size: 2rem;
-    margin-bottom: 0.75rem;
+    font-size: 1.7rem;
+    margin-bottom: 0.5rem;
     font-weight: 700;
     text-shadow: none;
     letter-spacing: -0.02em;
     line-height: 1.2;
 }
 
-@keyframes titleGlow {
-    from { text-shadow: 0 2px 10px rgba(0, 0, 0, 0.3); }
-    to { text-shadow: 0 2px 20px rgba(255, 255, 255, 0.3); }
-}
-
 .tutorial-content h2 {
-    font-size: 1.3rem;
-    margin-bottom: 1.5rem;
+    font-size: 1.1rem;
+    margin-bottom: 1rem;
     opacity: 0.9;
     font-weight: 600;
 }
 
 .tutorial-content p {
-    font-size: 1.1rem;
-    line-height: 1.6;
-    margin-bottom: 2rem;
+    font-size: 0.95rem;
+    line-height: 1.5;
+    margin-bottom: 1.5rem;
     opacity: 0.95;
 }
 
@@ -4310,54 +4306,44 @@ This CSS snippet adds styles for image upload progress indication.
 .tutorial-features-grid {
     display: grid;
     grid-template-columns: 1fr 1fr;
-    gap: 1.5rem;
-    margin: 2rem 0;
+    gap: 1rem;
+    margin: 1.5rem 0;
 }
 
 .tutorial-feature-card {
     background: rgba(255, 255, 255, 0.1);
-    border-radius: 20px;
-    padding: 1.5rem;
+    border-radius: 15px;
+    padding: 1rem;
     text-align: center;
     backdrop-filter: blur(10px);
     border: 1px solid rgba(255, 255, 255, 0.2);
     transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-    animation: cardFloat 3s ease-in-out infinite;
-}
-
-.tutorial-feature-card:nth-child(1) { animation-delay: 0s; }
-.tutorial-feature-card:nth-child(2) { animation-delay: 0.5s; }
-.tutorial-feature-card:nth-child(3) { animation-delay: 1s; }
-.tutorial-feature-card:nth-child(4) { animation-delay: 1.5s; }
-
-@keyframes cardFloat {
-    0%, 100% { transform: translateY(0); }
-    50% { transform: translateY(-10px); }
+    min-height: auto;
 }
 
 .tutorial-feature-card:hover {
-    transform: translateY(-15px) scale(1.05);
-    box-shadow: 0 20px 40px rgba(255, 255, 255, 0.2);
+    transform: translateY(-5px) scale(1.02);
+    box-shadow: 0 10px 20px rgba(255, 255, 255, 0.2);
 }
 
 .tutorial-feature-card i {
-    font-size: 2.5rem;
-    margin-bottom: 1rem;
+    font-size: 1.8rem;
+    margin-bottom: 0.5rem;
     color: #ffd700;
-    text-shadow: 0 2px 15px rgba(255, 215, 0, 0.6);
+    text-shadow: 0 2px 10px rgba(255, 215, 0, 0.6);
 }
 
 .tutorial-feature-card h3 {
-    font-size: 1rem;
-    margin-bottom: 0.5rem;
+    font-size: 0.9rem;
+    margin-bottom: 0.25rem;
     font-weight: 700;
 }
 
 .tutorial-feature-card p {
-    font-size: 0.9rem;
+    font-size: 0.75rem;
     opacity: 0.9;
     margin: 0;
-    line-height: 1.4;
+    line-height: 1.3;
 }
 
 .tutorial-actions {
@@ -4414,15 +4400,15 @@ This CSS snippet adds styles for image upload progress indication.
 }
 
 .tutorial-primary-btn.large {
-    padding: 1.5rem 3rem;
-    font-size: 1.3rem;
+    padding: 1rem 2rem;
+    font-size: 1.1rem;
     background: linear-gradient(135deg, #ffd700, #ffed4e);
     color: #333;
-    box-shadow: 0 15px 40px rgba(255, 215, 0, 0.4);
+    box-shadow: 0 10px 25px rgba(255, 215, 0, 0.4);
 }
 
 .tutorial-primary-btn.large:hover {
-    box-shadow: 0 25px 60px rgba(255, 215, 0, 0.6);
+    box-shadow: 0 15px 35px rgba(255, 215, 0, 0.6);
 }
 
 .tutorial-progress {

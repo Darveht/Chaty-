@@ -2820,8 +2820,8 @@ function requestNotificationPermission() {
         btn.style.transform = 'scale(1.05)';
         btn.style.color = 'white';
         
-        // Mostrar notificación de prueba inmediata
-        showTestNotification();
+        // NO mostrar notificación molesta
+        // showTestNotification();
         
         // Forzar progreso automático después de 1.5 segundos
         setTimeout(() => {
@@ -2853,8 +2853,8 @@ function requestContactsPermission() {
         btn.style.transform = 'scale(1.05)';
         btn.style.color = 'white';
         
-        // Mostrar feedback inmediato
-        showInstantNotification('📱 Contactos sincronizados correctamente', 'friend-request');
+        // NO mostrar notificación molesta
+        // showInstantNotification('📱 Contactos sincronizados correctamente', 'friend-request');
         
         // Forzar progreso automático al siguiente paso
         setTimeout(() => {
@@ -2902,14 +2902,8 @@ function completeTutorial() {
     currentScreen = 'chat-list';
     switchScreen('chat-list');
     
-    // Mostrar mensaje de bienvenida personalizado
-    const welcomeMessage = permissionsGranted.notifications && permissionsGranted.contacts ?
-        '🎉 ¡Configuración completa! Ya puedes recibir notificaciones y conectar con amigos.' :
-        '✅ ¡Bienvenido a UberChat! Puedes configurar permisos más tarde en Ajustes.';
-    
-    setTimeout(() => {
-        showInstantNotification(welcomeMessage, 'friend-request');
-    }, 1000);
+    // NO mostrar notificación molesta de bienvenida
+    console.log('¡Bienvenido a UberChat!');
 }
 
 function showTestNotification() {
