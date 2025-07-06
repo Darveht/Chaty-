@@ -308,18 +308,24 @@ const translations = {
 
 // Función para cambiar de pantalla con animación
 function switchScreen(targetScreen) {
+    console.log(`Cambiando de pantalla: ${currentScreen} -> ${targetScreen}`);
+    
     const currentElement = document.getElementById(`${currentScreen}-screen`);
     const targetElement = document.getElementById(`${targetScreen}-screen`);
 
-    if (currentElement) {
+    if (!targetElement) {
+        console.error(`Pantalla destino no encontrada: ${targetScreen}-screen`);
+        return;
+    }
+
+    if (currentElement && currentElement !== targetElement) {
         currentElement.classList.remove('active');
     }
 
     setTimeout(() => {
-        if (targetElement) {
-            targetElement.classList.add('active');
-            currentScreen = targetScreen;
-        }
+        targetElement.classList.add('active');
+        currentScreen = targetScreen;
+        console.log(`Pantalla cambiada exitosamente a: ${targetScreen}`);
     }, 150);
 }
 
@@ -1490,48 +1496,68 @@ function closeSuccessModal() {
 function showSection(section) {
     console.log('Navegando a sección:', section);
     
-    // Limpiar listeners anteriores si es necesario
-    if (section !== 'moments' && momentsListener) {
-        momentsListener.off();
-        momentsListener = null;
-    }
-    
-    // Actualizar navegación
-    document.querySelectorAll('.nav-item').forEach(item => {
-        item.classList.remove('active');
-    });
-    
-    // Mostrar pantalla correspondiente
-    switch(section) {
-        case 'chats':
-            switchScreen('chat-list');
-            loadUserContacts();
-            break;
-        case 'translate':
-            showTranslateSection();
-            break;
-        case 'moments':
-            console.log('Cargando pantalla de momentos...');
-            switchScreen('moments');
-            // Pequeño delay para asegurar que la pantalla esté visible
-            setTimeout(() => {
-                loadMoments();
-            }, 100);
-            break;
-        case 'calls':
-            switchScreen('calls-history');
-            loadCallHistory();
-            break;
-        case 'settings':
-            switchScreen('settings');
-            initializeSettings();
-            break;
-    }
-    
-    // Marcar como activo
-    const activeNavItem = document.querySelector(`.nav-item[onclick="showSection('${section}')"]`);
-    if (activeNavItem) {
-        activeNavItem.classList.add('active');
+    try {
+        // Limpiar listeners anteriores si es necesario
+        if (section !== 'moments' && momentsListener) {
+            momentsListener.off();
+            momentsListener = null;
+        }
+        
+        // Actualizar navegación
+        document.querySelectorAll('.nav-item').forEach(item => {
+            item.classList.remove('active');
+        });
+        
+        // Mostrar pantalla correspondiente
+        switch(section) {
+            case 'chats':
+                currentScreen = 'chat-list';
+                switchScreen('chat-list');
+                loadUserContacts();
+                break;
+            case 'translate':
+                showTranslateSection();
+                break;
+            case 'moments':
+                console.log('Iniciando carga de momentos...');
+                currentScreen = 'moments';
+                switchScreen('moments');
+                // Usar setTimeout más largo para asegurar que la pantalla esté completamente cargada
+                setTimeout(() => {
+                    try {
+                        loadMoments();
+                    } catch (error) {
+                        console.error('Error cargando momentos:', error);
+                        showMomentsError();
+                    }
+                }, 200);
+                break;
+            case 'calls':
+                currentScreen = 'calls-history';
+                switchScreen('calls-history');
+                loadCallHistory();
+                break;
+            case 'settings':
+                currentScreen = 'settings';
+                switchScreen('settings');
+                initializeSettings();
+                break;
+            default:
+                console.warn('Sección no reconocida:', section);
+                return;
+        }
+        
+        // Marcar como activo
+        const activeNavItem = document.querySelector(`.nav-item[onclick="showSection('${section}')"]`);
+        if (activeNavItem) {
+            activeNavItem.classList.add('active');
+        }
+        
+        console.log('Navegación completada a:', section);
+        
+    } catch (error) {
+        console.error('Error en showSection:', error);
+        showErrorMessage('Error navegando a la sección. Intenta de nuevo.');
     }
 }
 
@@ -2531,13 +2557,14 @@ function toggleCallNotifications(toggle) {
 // SISTEMA DE MOMENTOS
 // ================================
 
-// Función para cargar momentos desde Firebase con animaciones mejoradas
+// Función para cargar momentos desde Firebase con mejor manejo de errores
 function loadMoments() {
     console.log('🎬 Iniciando carga de momentos...');
     
     const momentsContainer = document.getElementById('moments-container');
     if (!momentsContainer) {
         console.error('No se encontró el contenedor de momentos');
+        showMomentsError();
         return;
     }
     
@@ -2550,7 +2577,79 @@ function loadMoments() {
     
     console.log('Usuario actual:', currentUser.uid);
     
-    // Mostrar indicador de carga animado estilo Uber
+    // Mostrar indicador de carga
+    showMomentsLoading();
+    
+    // Usar timeout para evitar colgamiento
+    const loadTimeout = setTimeout(() => {
+        console.warn('Timeout cargando momentos, mostrando estado vacío');
+        showEmptyMoments();
+    }, 10000); // 10 segundos timeout
+    
+    try {
+        // Verificar conexión a Firebase primero
+        if (typeof database === 'undefined') {
+            console.error('Firebase no está disponible');
+            clearTimeout(loadTimeout);
+            showMomentsOffline();
+            return;
+        }
+        
+        // Limpiar listener anterior
+        if (momentsListener) {
+            momentsListener.off();
+            momentsListener = null;
+        }
+        
+        // Configurar listener con mejor manejo de errores
+        momentsListener = database.ref('moments').orderByChild('timestamp').limitToLast(20);
+        
+        momentsListener.once('value')
+            .then((snapshot) => {
+                clearTimeout(loadTimeout);
+                console.log('Datos de momentos recibidos:', snapshot.exists());
+                
+                const momentsData = snapshot.val() || {};
+                const momentsList = Object.keys(momentsData).map(key => ({
+                    id: key,
+                    ...momentsData[key]
+                })).reverse(); // Más recientes primero
+                
+                console.log('Momentos encontrados:', momentsList.length);
+                
+                if (momentsList.length === 0) {
+                    showEmptyMoments();
+                } else {
+                    displayMoments(momentsList);
+                }
+                
+                // Configurar listener en tiempo real después del primer load
+                setTimeout(() => {
+                    try {
+                        setupRealtimeReactions();
+                    } catch (error) {
+                        console.error('Error configurando reacciones en tiempo real:', error);
+                    }
+                }, 1000);
+            })
+            .catch(error => {
+                clearTimeout(loadTimeout);
+                console.error('Error cargando momentos:', error);
+                showMomentsError();
+            });
+        
+    } catch (error) {
+        clearTimeout(loadTimeout);
+        console.error('Error configurando listeners de momentos:', error);
+        showMomentsError();
+    }
+}
+
+// Función para mostrar loading de momentos
+function showMomentsLoading() {
+    const momentsContainer = document.getElementById('moments-container');
+    if (!momentsContainer) return;
+    
     momentsContainer.innerHTML = `
         <div class="loading-moments uber-style">
             <div class="uber-loader">
@@ -2558,51 +2657,10 @@ function loadMoments() {
                 <div class="loader-circle"></div>
                 <div class="loader-circle"></div>
             </div>
-            <h3>Cargando momentos increíbles...</h3>
-            <p>✨ Preparando experiencias únicas</p>
+            <h3>Cargando momentos...</h3>
+            <p>✨ Preparando contenido</p>
         </div>
     `;
-    
-    // Configurar listener para momentos en tiempo real
-    if (momentsListener) {
-        momentsListener.off();
-        momentsListener = null;
-    }
-    
-    try {
-        // Configurar listener simple primero
-        momentsListener = database.ref('moments').orderByChild('timestamp').limitToLast(20);
-        
-        momentsListener.once('value', (snapshot) => {
-            console.log('Datos de momentos recibidos:', snapshot.exists());
-            
-            const momentsData = snapshot.val() || {};
-            const momentsList = Object.keys(momentsData).map(key => ({
-                id: key,
-                ...momentsData[key]
-            })).reverse(); // Más recientes primero
-            
-            console.log('Momentos encontrados:', momentsList.length);
-            
-            if (momentsList.length === 0) {
-                showEmptyMoments();
-            } else {
-                displayMoments(momentsList);
-            }
-        }).catch(error => {
-            console.error('Error cargando momentos:', error);
-            showEmptyMoments();
-        });
-        
-        // Configurar listener en tiempo real después del primer load
-        setTimeout(() => {
-            setupRealtimeReactions();
-        }, 1000);
-        
-    } catch (error) {
-        console.error('Error configurando listeners de momentos:', error);
-        showEmptyMoments();
-    }
 }
 
 // Función para mostrar estado vacío de momentos
@@ -2625,6 +2683,50 @@ function showEmptyMoments() {
             <button class="primary-btn" onclick="showCreateMoment()">
                 <i class="fas fa-plus"></i>
                 Crear Momento
+            </button>
+        </div>
+    `;
+}
+
+// Función para mostrar error de momentos
+function showMomentsError() {
+    console.log('Mostrando error de momentos');
+    const momentsContainer = document.getElementById('moments-container');
+    
+    if (!momentsContainer) return;
+    
+    momentsContainer.innerHTML = `
+        <div class="empty-moments">
+            <div class="empty-moments-icon" style="background: linear-gradient(135deg, #e74c3c, #c0392b);">
+                <i class="fas fa-exclamation-triangle"></i>
+            </div>
+            <h3>Error cargando momentos</h3>
+            <p>No se pudieron cargar los momentos. Verifica tu conexión.</p>
+            <button class="primary-btn" onclick="loadMoments()">
+                <i class="fas fa-refresh"></i>
+                Reintentar
+            </button>
+        </div>
+    `;
+}
+
+// Función para mostrar estado offline
+function showMomentsOffline() {
+    console.log('Mostrando estado offline de momentos');
+    const momentsContainer = document.getElementById('moments-container');
+    
+    if (!momentsContainer) return;
+    
+    momentsContainer.innerHTML = `
+        <div class="empty-moments">
+            <div class="empty-moments-icon" style="background: linear-gradient(135deg, #95a5a6, #7f8c8d);">
+                <i class="fas fa-wifi-slash"></i>
+            </div>
+            <h3>Sin conexión</h3>
+            <p>Los momentos no están disponibles sin conexión a internet.</p>
+            <button class="primary-btn" onclick="loadMoments()">
+                <i class="fas fa-refresh"></i>
+                Reconectar
             </button>
         </div>
     `;
