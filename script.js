@@ -823,11 +823,8 @@ function verifyCode() {
                     console.log('Configurando listeners en tiempo real...');
 
                     setTimeout(() => {
-                        loadUserContacts();
-                        switchScreen('chat-list');
-                        
-                        // Mostrar mensaje de bienvenida
-                        showInstantNotification('✅ ¡Bienvenido a UberChat! Ya puedes recibir solicitudes.', 'friend-request');
+                        // Iniciar tutorial después de verificación exitosa
+                        startTutorial();
                     }, 1500);
                 })
                 .catch(error => {
@@ -2614,9 +2611,14 @@ function checkAuthState() {
                         // Inicializar configuraciones
                         initializeSettings();
                         
-                        // Ir directamente a la lista de chats
-                        loadUserContacts();
-                        switchScreen('chat-list');
+                        // Verificar si necesita tutorial
+                        if (!checkTutorialStatus()) {
+                            startTutorial();
+                        } else {
+                            // Ir directamente a la lista de chats
+                            loadUserContacts();
+                            switchScreen('chat-list');
+                        }
                         
                         console.log('Sesión restaurada exitosamente');
                     } else {
@@ -2754,6 +2756,248 @@ function maintainConnection() {
         database.ref(`users/${currentUser.uid}/status`).onDisconnect().set('offline');
         database.ref(`users/${currentUser.uid}/lastSeen`).onDisconnect().set(firebase.database.ServerValue.TIMESTAMP);
     }
+}
+
+// Variables del tutorial
+let tutorialStep = 0;
+let tutorialCompleted = false;
+let permissionsGranted = {
+    notifications: false,
+    contacts: false
+};
+
+// Funciones del Tutorial
+function startTutorial() {
+    console.log('Iniciando tutorial interactivo...');
+    tutorialStep = 1;
+    switchScreen('tutorial-notifications');
+    
+    // Agregar efectos de sonido del tutorial
+    playTutorialSound('start');
+}
+
+function requestNotificationPermission() {
+    console.log('Solicitando permisos de notificación...');
+    
+    // Animar botón
+    const btn = event.target;
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Activando...';
+    btn.disabled = true;
+    
+    // Simular solicitud de permisos
+    if ('Notification' in window) {
+        Notification.requestPermission().then(permission => {
+            if (permission === 'granted') {
+                permissionsGranted.notifications = true;
+                console.log('Permisos de notificación concedidos');
+                
+                // Mostrar notificación de prueba
+                showTestNotification();
+                
+                setTimeout(() => {
+                    nextTutorialStep();
+                }, 2000);
+            } else {
+                console.log('Permisos de notificación denegados');
+                showPermissionDeniedMessage('notificaciones');
+                setTimeout(() => {
+                    nextTutorialStep();
+                }, 3000);
+            }
+        });
+    } else {
+        // Fallback para navegadores que no soportan notificaciones
+        console.log('Navegador no soporta notificaciones, continuando...');
+        permissionsGranted.notifications = true;
+        setTimeout(() => {
+            nextTutorialStep();
+        }, 1500);
+    }
+}
+
+function requestContactsPermission() {
+    console.log('Solicitando permisos de contactos...');
+    
+    // Animar botón
+    const btn = event.target;
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Sincronizando...';
+    btn.disabled = true;
+    
+    // Simular solicitud de contactos (en navegador no hay API nativa, simular)
+    setTimeout(() => {
+        permissionsGranted.contacts = true;
+        console.log('Acceso a contactos simulado como concedido');
+        
+        // Mostrar animación de sincronización
+        showContactSyncAnimation();
+        
+        setTimeout(() => {
+            nextTutorialStep();
+        }, 3000);
+    }, 2000);
+}
+
+function nextTutorialStep() {
+    tutorialStep++;
+    playTutorialSound('next');
+    
+    switch(tutorialStep) {
+        case 2:
+            switchScreen('tutorial-contacts');
+            break;
+        case 3:
+            switchScreen('tutorial-features');
+            break;
+        default:
+            completeTutorial();
+            break;
+    }
+}
+
+function skipTutorial() {
+    console.log('Usuario omitió el tutorial');
+    tutorialCompleted = true;
+    completeTutorial();
+}
+
+function completeTutorial() {
+    console.log('Tutorial completado');
+    tutorialCompleted = true;
+    playTutorialSound('complete');
+    
+    // Cargar contactos y mostrar pantalla principal
+    loadUserContacts();
+    switchScreen('chat-list');
+    
+    // Mostrar mensaje de bienvenida personalizado
+    const welcomeMessage = permissionsGranted.notifications && permissionsGranted.contacts ?
+        '🎉 ¡Configuración completa! Ya puedes recibir notificaciones y conectar con amigos.' :
+        '✅ ¡Bienvenido a UberChat! Puedes configurar permisos más tarde en Ajustes.';
+    
+    setTimeout(() => {
+        showInstantNotification(welcomeMessage, 'friend-request');
+    }, 1000);
+    
+    // Guardar estado del tutorial
+    localStorage.setItem('uberchat_tutorial_completed', 'true');
+}
+
+function showTestNotification() {
+    if (permissionsGranted.notifications && 'Notification' in window) {
+        const notification = new Notification('🔔 ¡Notificaciones Activadas!', {
+            body: 'Ahora recibirás alertas de mensajes y llamadas en tiempo real.',
+            icon: 'https://api.dicebear.com/7.x/avataaars/svg?seed=uberchat',
+            badge: 'https://api.dicebear.com/7.x/avataaars/svg?seed=notification'
+        });
+        
+        setTimeout(() => {
+            notification.close();
+        }, 4000);
+    }
+}
+
+function showPermissionDeniedMessage(permissionType) {
+    const slimeContainer = document.querySelector('.tutorial-slime-container');
+    const message = document.createElement('div');
+    message.className = 'permission-denied-message';
+    message.innerHTML = `
+        <div style="background: rgba(255, 0, 0, 0.1); padding: 1rem; border-radius: 15px; margin-top: 1rem; border: 1px solid rgba(255, 0, 0, 0.3);">
+            <p style="margin: 0; font-size: 0.9rem;">⚠️ Permisos de ${permissionType} no concedidos</p>
+            <p style="margin: 0.5rem 0 0 0; font-size: 0.8rem; opacity: 0.8;">Puedes activarlos más tarde en Ajustes</p>
+        </div>
+    `;
+    
+    slimeContainer.appendChild(message);
+    
+    setTimeout(() => {
+        if (message.parentNode) {
+            message.parentNode.removeChild(message);
+        }
+    }, 3000);
+}
+
+function showContactSyncAnimation() {
+    const slime = document.querySelector('.tutorial-slime');
+    const syncEffect = document.createElement('div');
+    syncEffect.className = 'sync-effect';
+    syncEffect.innerHTML = `
+        <div style="position: absolute; top: -40px; left: 50%; transform: translateX(-50%); color: #00ff88; font-size: 2rem; animation: syncPulse 1s ease-in-out 3;">
+            ✨
+        </div>
+        <style>
+            @keyframes syncPulse {
+                0%, 100% { opacity: 0; transform: translateX(-50%) scale(0.8); }
+                50% { opacity: 1; transform: translateX(-50%) scale(1.2); }
+            }
+        </style>
+    `;
+    
+    slime.appendChild(syncEffect);
+    
+    setTimeout(() => {
+        if (syncEffect.parentNode) {
+            syncEffect.parentNode.removeChild(syncEffect);
+        }
+    }, 3000);
+}
+
+function playTutorialSound(type) {
+    if (!window.AudioContext && !window.webkitAudioContext) return;
+    
+    const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+    const oscillator = audioContext.createOscillator();
+    const gainNode = audioContext.createGain();
+
+    oscillator.connect(gainNode);
+    gainNode.connect(audioContext.destination);
+
+    switch(type) {
+        case 'start':
+            // Sonido de inicio mágico
+            oscillator.frequency.setValueAtTime(523, audioContext.currentTime); // C5
+            oscillator.frequency.exponentialRampToValueAtTime(784, audioContext.currentTime + 0.3); // G5
+            gainNode.gain.setValueAtTime(0.1, audioContext.currentTime);
+            gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.5);
+            oscillator.stop(audioContext.currentTime + 0.5);
+            break;
+            
+        case 'next':
+            // Sonido de progreso
+            oscillator.frequency.setValueAtTime(659, audioContext.currentTime); // E5
+            oscillator.frequency.exponentialRampToValueAtTime(880, audioContext.currentTime + 0.2); // A5
+            gainNode.gain.setValueAtTime(0.08, audioContext.currentTime);
+            gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.3);
+            oscillator.stop(audioContext.currentTime + 0.3);
+            break;
+            
+        case 'complete':
+            // Fanfarria de completado
+            const frequencies = [523, 659, 784, 1047]; // C5, E5, G5, C6
+            frequencies.forEach((freq, index) => {
+                setTimeout(() => {
+                    const osc = audioContext.createOscillator();
+                    const gain = audioContext.createGain();
+                    osc.connect(gain);
+                    gain.connect(audioContext.destination);
+                    
+                    osc.frequency.setValueAtTime(freq, audioContext.currentTime);
+                    gain.gain.setValueAtTime(0.06, audioContext.currentTime);
+                    gain.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.4);
+                    
+                    osc.start();
+                    osc.stop(audioContext.currentTime + 0.4);
+                }, index * 100);
+            });
+            return; // No ejecutar el código de abajo
+    }
+
+    oscillator.start();
+}
+
+// Función para verificar si el tutorial ya fue completado
+function checkTutorialStatus() {
+    const tutorialCompleted = localStorage.getItem('uberchat_tutorial_completed');
+    return tutorialCompleted === 'true';
 }
 
 // Inicialización de la aplicación

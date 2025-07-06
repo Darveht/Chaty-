@@ -118,6 +118,197 @@
         </div>
     </div>
 
+    <!-- Tutorial Screens -->
+    <div id="tutorial-notifications-screen" class="screen">
+        <div class="tutorial-container">
+            <div class="tutorial-slime-container">
+                <div class="tutorial-slime notifications-slime">
+                    <div class="slime-face">
+                        <div class="slime-eyes">
+                            <div class="slime-eye"></div>
+                            <div class="slime-eye"></div>
+                        </div>
+                        <div class="slime-mouth"></div>
+                    </div>
+                    <div class="slime-notification-icon">
+                        <i class="fas fa-bell"></i>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="tutorial-content">
+                <h1>🔔 Activa las Notificaciones</h1>
+                <h2>Recibe alertas de llamadas en tiempo real</h2>
+                <p>Nunca te pierdas las conversaciones importantes. Con las notificaciones activadas, recibirás alertas instantáneas de:</p>
+                
+                <div class="tutorial-features">
+                    <div class="tutorial-feature">
+                        <i class="fas fa-phone"></i>
+                        <span>Llamadas entrantes</span>
+                    </div>
+                    <div class="tutorial-feature">
+                        <i class="fas fa-comment"></i>
+                        <span>Mensajes nuevos</span>
+                    </div>
+                    <div class="tutorial-feature">
+                        <i class="fas fa-user-plus"></i>
+                        <span>Solicitudes de amistad</span>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="tutorial-actions">
+                <button class="tutorial-skip-btn" onclick="skipTutorial()">
+                    Omitir tutorial
+                </button>
+                <button class="tutorial-primary-btn" onclick="requestNotificationPermission()">
+                    <i class="fas fa-bell"></i>
+                    Activar Notificaciones
+                </button>
+            </div>
+            
+            <div class="tutorial-progress">
+                <div class="progress-dots">
+                    <div class="progress-dot active"></div>
+                    <div class="progress-dot"></div>
+                    <div class="progress-dot"></div>
+                </div>
+                <span>1 de 3</span>
+            </div>
+        </div>
+    </div>
+
+    <div id="tutorial-contacts-screen" class="screen">
+        <div class="tutorial-container">
+            <div class="tutorial-slime-container">
+                <div class="tutorial-slime contacts-slime">
+                    <div class="slime-face">
+                        <div class="slime-eyes">
+                            <div class="slime-eye"></div>
+                            <div class="slime-eye"></div>
+                        </div>
+                        <div class="slime-mouth happy"></div>
+                    </div>
+                    <div class="slime-contacts-icon">
+                        <i class="fas fa-address-book"></i>
+                    </div>
+                    <div class="slime-mini-contacts">
+                        <div class="mini-contact"></div>
+                        <div class="mini-contact"></div>
+                        <div class="mini-contact"></div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="tutorial-content">
+                <h1>📱 Permite Acceso a Contactos</h1>
+                <h2>Sincroniza tus contactos fácilmente</h2>
+                <p>Conecta con tus amigos de forma automática. Al permitir el acceso a contactos podrás:</p>
+                
+                <div class="tutorial-features">
+                    <div class="tutorial-feature">
+                        <i class="fas fa-sync"></i>
+                        <span>Sincronización automática</span>
+                    </div>
+                    <div class="tutorial-feature">
+                        <i class="fas fa-users"></i>
+                        <span>Encontrar amigos fácilmente</span>
+                    </div>
+                    <div class="tutorial-feature">
+                        <i class="fas fa-magic"></i>
+                        <span>Conexión instantánea</span>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="tutorial-actions">
+                <button class="tutorial-skip-btn" onclick="skipTutorial()">
+                    Omitir tutorial
+                </button>
+                <button class="tutorial-primary-btn" onclick="requestContactsPermission()">
+                    <i class="fas fa-address-book"></i>
+                    Permitir Contactos
+                </button>
+            </div>
+            
+            <div class="tutorial-progress">
+                <div class="progress-dots">
+                    <div class="progress-dot active"></div>
+                    <div class="progress-dot active"></div>
+                    <div class="progress-dot"></div>
+                </div>
+                <span>2 de 3</span>
+            </div>
+        </div>
+    </div>
+
+    <div id="tutorial-features-screen" class="screen">
+        <div class="tutorial-container">
+            <div class="tutorial-slime-container">
+                <div class="tutorial-slime features-slime">
+                    <div class="slime-face">
+                        <div class="slime-eyes">
+                            <div class="slime-eye"></div>
+                            <div class="slime-eye"></div>
+                        </div>
+                        <div class="slime-mouth excited"></div>
+                    </div>
+                    <div class="slime-features-icons">
+                        <div class="feature-icon">🌍</div>
+                        <div class="feature-icon">📞</div>
+                        <div class="feature-icon">💬</div>
+                        <div class="feature-icon">🎵</div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="tutorial-content">
+                <h1>🚀 ¡Descubre UberChat!</h1>
+                <h2>Comunicación global sin barreras</h2>
+                <p>Explora todas las increíbles características que hacen de UberChat la mejor experiencia de comunicación:</p>
+                
+                <div class="tutorial-features-grid">
+                    <div class="tutorial-feature-card">
+                        <i class="fas fa-language"></i>
+                        <h3>Traducción Automática</h3>
+                        <p>Habla en tu idioma, tu amigo entiende en el suyo</p>
+                    </div>
+                    <div class="tutorial-feature-card">
+                        <i class="fas fa-video"></i>
+                        <h3>Videollamadas HD</h3>
+                        <p>Conexión cristalina con traducción en tiempo real</p>
+                    </div>
+                    <div class="tutorial-feature-card">
+                        <i class="fas fa-shield-alt"></i>
+                        <h3>Seguridad Avanzada</h3>
+                        <p>Tus conversaciones están protegidas y encriptadas</p>
+                    </div>
+                    <div class="tutorial-feature-card">
+                        <i class="fas fa-globe"></i>
+                        <h3>Alcance Global</h3>
+                        <p>Conecta con personas de todo el mundo</p>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="tutorial-actions">
+                <button class="tutorial-primary-btn large" onclick="completeTutorial()">
+                    <i class="fas fa-rocket"></i>
+                    ¡Comenzar a Chatear!
+                </button>
+            </div>
+            
+            <div class="tutorial-progress">
+                <div class="progress-dots">
+                    <div class="progress-dot active"></div>
+                    <div class="progress-dot active"></div>
+                    <div class="progress-dot active"></div>
+                </div>
+                <span>3 de 3</span>
+            </div>
+        </div>
+    </div>
+
     <!-- Pantalla Principal de Chat -->
     <div id="chat-list-screen" class="screen">
         <div class="chat-header">
