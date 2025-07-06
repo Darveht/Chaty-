@@ -1522,11 +1522,8 @@ function showSection(section) {
                 console.log('Cambiando a momentos...');
                 currentScreen = 'moments';
                 switchScreen('moments');
-                // Simplificar la carga de momentos
-                setTimeout(() => {
-                    console.log('Inicializando momentos...');
-                    initializeMomentsScreen();
-                }, 100);
+                // Cargar momentos inmediatamente
+                loadMomentsFromFirebase();
                 break;
             case 'calls':
                 currentScreen = 'calls-history';
@@ -2592,45 +2589,30 @@ function toggleCallNotifications(toggle) {
 function loadMomentsFromFirebase() {
     console.log('Cargando momentos desde Firebase...');
     
-    if (!currentUser || !currentUser.uid) {
-        console.log('Usuario no disponible para cargar momentos');
-        return;
-    }
-    
     const momentsContainer = document.getElementById('moments-container');
     if (!momentsContainer) {
         console.error('Contenedor de momentos no encontrado');
         return;
     }
     
+    // Mostrar contenido por defecto inmediatamente
+    showEmptyMoments();
+    
+    // Si no hay usuario, mostrar pantalla vacía
+    if (!currentUser || !currentUser.uid) {
+        console.log('Usuario no disponible para cargar momentos');
+        return;
+    }
+    
     try {
-        // Mostrar loading temporal
-        momentsContainer.innerHTML = `
-            <div class="loading-moments uber-style">
-                <div class="uber-loader">
-                    <div class="loader-circle"></div>
-                    <div class="loader-circle"></div>
-                    <div class="loader-circle"></div>
-                </div>
-                <h3>Cargando momentos...</h3>
-                <p>✨ Preparando contenido</p>
-            </div>
-        `;
-        
         // Verificar Firebase
         if (typeof database === 'undefined') {
             console.error('Firebase no disponible');
-            showEmptyMoments();
             return;
         }
         
-        // Cargar momentos con timeout
-        const loadPromise = database.ref('moments').orderByChild('timestamp').limitToLast(10).once('value');
-        const timeoutPromise = new Promise((_, reject) => 
-            setTimeout(() => reject(new Error('Timeout')), 5000)
-        );
-        
-        Promise.race([loadPromise, timeoutPromise])
+        // Intentar cargar momentos de Firebase
+        database.ref('moments').orderByChild('timestamp').limitToLast(10).once('value')
             .then(snapshot => {
                 const momentsData = snapshot.val() || {};
                 const momentsList = Object.keys(momentsData).map(key => ({
@@ -2638,20 +2620,18 @@ function loadMomentsFromFirebase() {
                     ...momentsData[key]
                 })).reverse();
                 
-                if (momentsList.length === 0) {
-                    showEmptyMoments();
-                } else {
+                if (momentsList.length > 0) {
                     displayMoments(momentsList);
                 }
             })
             .catch(error => {
                 console.error('Error cargando momentos:', error);
-                showEmptyMoments();
+                // Ya está mostrando la pantalla vacía, no hacer nada más
             });
             
     } catch (error) {
         console.error('Error en loadMomentsFromFirebase:', error);
-        showEmptyMoments();
+        // Ya está mostrando la pantalla vacía, no hacer nada más
     }
 }
 
