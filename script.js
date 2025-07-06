@@ -1193,6 +1193,9 @@ function verifyCode() {
 
                     // Inicializar configuraciones
                     initializeSettings();
+                    
+                    // Inicializar sistema de almacenamiento en tiempo real
+                    storageManager.initialize();
 
                     console.log('Configurando listeners en tiempo real...');
 
@@ -1878,6 +1881,223 @@ let privacySettings = {
     onlineStatusVisible: true
 };
 
+// Sistema de gestión de almacenamiento en tiempo real
+let storageManager = {
+    totalSpace: 1073741824, // 1GB en bytes
+    usedSpace: 0,
+    files: new Map(),
+    listeners: [],
+    
+    // Inicializar el gestor de almacenamiento
+    initialize: function() {
+        this.loadStorageData();
+        this.setupRealtimeListener();
+        this.updateStorageUI();
+    },
+    
+    // Cargar datos de almacenamiento desde Firebase
+    loadStorageData: function() {
+        if (!currentUser || !currentUser.uid) return;
+        
+        database.ref(`userStorage/${currentUser.uid}`).once('value')
+            .then(snapshot => {
+                const storageData = snapshot.val() || {};
+                this.usedSpace = storageData.usedSpace || 0;
+                this.files = new Map(Object.entries(storageData.files || {}));
+                this.updateStorageUI();
+                console.log('Datos de almacenamiento cargados:', this.usedSpace, 'bytes usados');
+            })
+            .catch(error => {
+                console.error('Error cargando datos de almacenamiento:', error);
+            });
+    },
+    
+    // Configurar listener en tiempo real para cambios de almacenamiento
+    setupRealtimeListener: function() {
+        if (!currentUser || !currentUser.uid) return;
+        
+        database.ref(`userStorage/${currentUser.uid}`).on('value', (snapshot) => {
+            const storageData = snapshot.val() || {};
+            this.usedSpace = storageData.usedSpace || 0;
+            this.files = new Map(Object.entries(storageData.files || {}));
+            this.updateStorageUI();
+            
+            // Notificar a listeners registrados
+            this.listeners.forEach(listener => {
+                if (typeof listener === 'function') {
+                    listener(this.getStorageInfo());
+                }
+            });
+        });
+    },
+    
+    // Añadir archivo al almacenamiento
+    addFile: function(fileName, fileSize, fileType, base64Data) {
+        if (!currentUser || !currentUser.uid) return Promise.reject('Usuario no autenticado');
+        
+        const fileId = Date.now().toString();
+        const fileInfo = {
+            id: fileId,
+            name: fileName,
+            size: fileSize,
+            type: fileType,
+            uploadedAt: Date.now(),
+            base64: base64Data
+        };
+        
+        // Verificar espacio disponible
+        if (this.usedSpace + fileSize > this.totalSpace) {
+            return Promise.reject('Espacio insuficiente en el almacenamiento');
+        }
+        
+        this.files.set(fileId, fileInfo);
+        this.usedSpace += fileSize;
+        
+        // Guardar en Firebase
+        return this.saveStorageData().then(() => {
+            console.log(`Archivo añadido: ${fileName} (${this.formatFileSize(fileSize)})`);
+            this.showStorageNotification(`📁 ${fileName} guardado (${this.formatFileSize(fileSize)})`);
+            return fileId;
+        });
+    },
+    
+    // Eliminar archivo del almacenamiento
+    removeFile: function(fileId) {
+        if (!this.files.has(fileId)) return Promise.resolve();
+        
+        const file = this.files.get(fileId);
+        this.usedSpace -= file.size;
+        this.files.delete(fileId);
+        
+        return this.saveStorageData().then(() => {
+            console.log(`Archivo eliminado: ${file.name}`);
+            this.showStorageNotification(`🗑️ ${file.name} eliminado`);
+        });
+    },
+    
+    // Guardar datos en Firebase
+    saveStorageData: function() {
+        if (!currentUser || !currentUser.uid) return Promise.reject('Usuario no autenticado');
+        
+        const storageData = {
+            usedSpace: this.usedSpace,
+            files: Object.fromEntries(this.files),
+            lastUpdated: Date.now()
+        };
+        
+        return database.ref(`userStorage/${currentUser.uid}`).set(storageData);
+    },
+    
+    // Obtener información del almacenamiento
+    getStorageInfo: function() {
+        const usedPercentage = (this.usedSpace / this.totalSpace) * 100;
+        return {
+            totalSpace: this.totalSpace,
+            usedSpace: this.usedSpace,
+            freeSpace: this.totalSpace - this.usedSpace,
+            usedPercentage: usedPercentage,
+            fileCount: this.files.size,
+            files: Array.from(this.files.values())
+        };
+    },
+    
+    // Formatear tamaño de archivo
+    formatFileSize: function(bytes) {
+        if (bytes === 0) return '0 B';
+        const k = 1024;
+        const sizes = ['B', 'KB', 'MB', 'GB'];
+        const i = Math.floor(Math.log(bytes) / Math.log(k));
+        return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+    },
+    
+    // Actualizar UI de almacenamiento en tiempo real
+    updateStorageUI: function() {
+        const info = this.getStorageInfo();
+        
+        // Actualizar en configuraciones si está visible
+        const storageElements = document.querySelectorAll('.storage-info');
+        storageElements.forEach(element => {
+            element.innerHTML = `
+                <div class="storage-usage-bar">
+                    <div class="storage-used" style="width: ${info.usedPercentage}%"></div>
+                </div>
+                <div class="storage-text">
+                    ${this.formatFileSize(info.usedSpace)} de ${this.formatFileSize(info.totalSpace)} usado
+                </div>
+                <div class="storage-files">
+                    ${info.fileCount} archivo${info.fileCount !== 1 ? 's' : ''} almacenado${info.fileCount !== 1 ? 's' : ''}
+                </div>
+            `;
+        });
+        
+        // Actualizar indicadores en otras partes de la app
+        this.updateStorageIndicators(info);
+    },
+    
+    // Actualizar indicadores de almacenamiento en la app
+    updateStorageIndicators: function(info) {
+        // Añadir indicador en el header de configuraciones
+        const settingsHeader = document.querySelector('.settings-header');
+        if (settingsHeader) {
+            let storageIndicator = settingsHeader.querySelector('.storage-indicator');
+            if (!storageIndicator) {
+                storageIndicator = document.createElement('div');
+                storageIndicator.className = 'storage-indicator';
+                settingsHeader.appendChild(storageIndicator);
+            }
+            
+            const color = info.usedPercentage > 90 ? '#e74c3c' : 
+                         info.usedPercentage > 70 ? '#f39c12' : '#00a854';
+            
+            storageIndicator.innerHTML = `
+                <div style="display: flex; align-items: center; gap: 0.5rem; font-size: 0.8rem; color: ${color};">
+                    <i class="fas fa-hdd"></i>
+                    <span>${Math.round(info.usedPercentage)}% usado</span>
+                </div>
+            `;
+        }
+    },
+    
+    // Mostrar notificación de almacenamiento
+    showStorageNotification: function(message) {
+        showInstantNotification(message, 'friend-request');
+    },
+    
+    // Limpiar archivos antiguos automáticamente
+    cleanupOldFiles: function(daysOld = 30) {
+        const cutoffDate = Date.now() - (daysOld * 24 * 60 * 60 * 1000);
+        let cleanedSize = 0;
+        let cleanedCount = 0;
+        
+        for (let [fileId, file] of this.files) {
+            if (file.uploadedAt < cutoffDate) {
+                cleanedSize += file.size;
+                cleanedCount++;
+                this.files.delete(fileId);
+                this.usedSpace -= file.size;
+            }
+        }
+        
+        if (cleanedCount > 0) {
+            this.saveStorageData().then(() => {
+                this.showStorageNotification(`🧹 ${cleanedCount} archivos antiguos eliminados (${this.formatFileSize(cleanedSize)} liberados)`);
+            });
+        }
+        
+        return { cleanedCount, cleanedSize };
+    },
+    
+    // Registrar listener para cambios de almacenamiento
+    addListener: function(listener) {
+        this.listeners.push(listener);
+    },
+    
+    // Obtener archivos por tipo
+    getFilesByType: function(type) {
+        return Array.from(this.files.values()).filter(file => file.type.startsWith(type));
+    }
+};
+
 // Variables para el sistema de deslizado y silenciado
 let swipeStartX = 0;
 let swipeStartY = 0;
@@ -2089,7 +2309,7 @@ function compressImage(file) {
     });
 }
 
-// Función para subir imagen a Firebase como base64
+// Función para subir imagen a Firebase como base64 con gestión de almacenamiento
 async function uploadToFirebase(file, resourceType = 'image') {
     console.log('Subiendo imagen a Firebase:', file.name, file.size);
     
@@ -2108,6 +2328,15 @@ async function uploadToFirebase(file, resourceType = 'image') {
         console.log('Comprimiendo imagen...');
         const compressedBase64 = await compressImage(file);
         
+        // Calcular tamaño del base64 comprimido
+        const base64Size = Math.round((compressedBase64.length * 3) / 4);
+        
+        // Verificar espacio disponible en el almacenamiento
+        const storageInfo = storageManager.getStorageInfo();
+        if (storageInfo.usedSpace + base64Size > storageInfo.totalSpace) {
+            throw new Error(`Espacio insuficiente. Necesitas ${storageManager.formatFileSize(base64Size)} pero solo tienes ${storageManager.formatFileSize(storageInfo.freeSpace)} disponible.`);
+        }
+        
         // Generar ID único para la imagen
         const imageId = Date.now().toString();
         const imagePath = `images/${currentUser.uid}/${imageId}`;
@@ -2121,13 +2350,17 @@ async function uploadToFirebase(file, resourceType = 'image') {
             mimeType: file.type,
             uploadedBy: currentUser.uid,
             uploadedAt: Date.now(),
-            compressed: true
+            compressed: true,
+            compressedSize: base64Size
         };
         
         console.log('Guardando imagen en Firebase...');
         
         // Guardar en Firebase Realtime Database
         await database.ref(imagePath).set(imageData);
+        
+        // Actualizar almacenamiento en tiempo real
+        await storageManager.addFile(file.name, base64Size, file.type, compressedBase64);
         
         console.log('Imagen subida exitosamente a Firebase:', imageId);
         
@@ -2528,9 +2761,152 @@ function showDataSettings() {
 }
 
 function showStorageSettings() {
-    showFullScreenMessage('💾 Gestión de Almacenamiento', 
-        'Espacio usado: 45.2 MB de 1 GB disponible. Puedes limpiar archivos antiguos desde aquí.', 
-        'info');
+    // Crear pantalla completa de gestión de almacenamiento
+    const storageScreen = document.createElement('div');
+    storageScreen.id = 'storage-settings-screen';
+    storageScreen.className = 'screen active';
+
+    const storageInfo = storageManager.getStorageInfo();
+    const images = storageManager.getFilesByType('image');
+    const usedPercentage = storageInfo.usedPercentage;
+    
+    let statusColor = '#00a854';
+    let statusText = 'Espacio disponible';
+    if (usedPercentage > 90) {
+        statusColor = '#e74c3c';
+        statusText = 'Espacio casi agotado';
+    } else if (usedPercentage > 70) {
+        statusColor = '#f39c12';
+        statusText = 'Espacio limitado';
+    }
+
+    storageScreen.innerHTML = `
+        <div class="storage-settings-container">
+            <div class="storage-header">
+                <button class="back-btn" onclick="closeStorageSettings()">
+                    <i class="fas fa-arrow-left"></i>
+                </button>
+                <h2>Gestión de Almacenamiento</h2>
+                <div class="storage-subtitle">Administra tus archivos y espacio</div>
+            </div>
+
+            <div class="storage-content">
+                <!-- Resumen de almacenamiento -->
+                <div class="storage-overview">
+                    <div class="storage-circle">
+                        <div class="circle-progress" style="--progress: ${usedPercentage}%; --color: ${statusColor};">
+                            <div class="circle-inner">
+                                <div class="usage-percentage">${Math.round(usedPercentage)}%</div>
+                                <div class="usage-text">usado</div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="storage-details">
+                        <div class="storage-status" style="color: ${statusColor};">
+                            <i class="fas fa-info-circle"></i>
+                            <span>${statusText}</span>
+                        </div>
+                        <div class="storage-numbers">
+                            <div class="storage-item">
+                                <span class="label">Usado:</span>
+                                <span class="value">${storageManager.formatFileSize(storageInfo.usedSpace)}</span>
+                            </div>
+                            <div class="storage-item">
+                                <span class="label">Disponible:</span>
+                                <span class="value">${storageManager.formatFileSize(storageInfo.freeSpace)}</span>
+                            </div>
+                            <div class="storage-item">
+                                <span class="label">Total:</span>
+                                <span class="value">${storageManager.formatFileSize(storageInfo.totalSpace)}</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Acciones rápidas -->
+                <div class="storage-actions">
+                    <button class="storage-action-btn" onclick="cleanupOldFiles()">
+                        <i class="fas fa-broom"></i>
+                        <div>
+                            <div class="action-title">Limpiar Archivos Antiguos</div>
+                            <div class="action-desc">Eliminar archivos de más de 30 días</div>
+                        </div>
+                    </button>
+                    <button class="storage-action-btn" onclick="clearImageCache()">
+                        <i class="fas fa-images"></i>
+                        <div>
+                            <div class="action-title">Limpiar Caché de Imágenes</div>
+                            <div class="action-desc">${images.length} imágenes almacenadas</div>
+                        </div>
+                    </button>
+                </div>
+
+                <!-- Lista de archivos -->
+                <div class="files-section">
+                    <div class="section-header">
+                        <h3>Archivos Recientes</h3>
+                        <span class="file-count">${storageInfo.fileCount} archivos</span>
+                    </div>
+                    
+                    <div class="files-list" id="storage-files-list">
+                        ${storageInfo.files.length > 0 ? 
+                            storageInfo.files.slice(-10).reverse().map(file => `
+                                <div class="file-item">
+                                    <div class="file-icon">
+                                        <i class="fas fa-${file.type.startsWith('image') ? 'image' : 'file'}"></i>
+                                    </div>
+                                    <div class="file-info">
+                                        <div class="file-name">${file.name}</div>
+                                        <div class="file-details">
+                                            ${storageManager.formatFileSize(file.size)} • ${new Date(file.uploadedAt).toLocaleDateString()}
+                                        </div>
+                                    </div>
+                                    <button class="file-delete-btn" onclick="deleteStorageFile('${file.id}')">
+                                        <i class="fas fa-trash-alt"></i>
+                                    </button>
+                                </div>
+                            `).join('') : 
+                            '<div class="empty-files">No hay archivos almacenados</div>'
+                        }
+                    </div>
+                </div>
+            </div>
+        </div>
+    `;
+
+    // Ocultar pantalla actual
+    const currentScreenElement = document.querySelector('.screen.active');
+    if (currentScreenElement && currentScreenElement !== storageScreen) {
+        currentScreenElement.classList.remove('active');
+    }
+
+    document.body.appendChild(storageScreen);
+    
+    // Configurar actualización en tiempo real
+    const updateStorageDisplay = (info) => {
+        const filesList = document.getElementById('storage-files-list');
+        if (filesList && info.files.length > 0) {
+            filesList.innerHTML = info.files.slice(-10).reverse().map(file => `
+                <div class="file-item">
+                    <div class="file-icon">
+                        <i class="fas fa-${file.type.startsWith('image') ? 'image' : 'file'}"></i>
+                    </div>
+                    <div class="file-info">
+                        <div class="file-name">${file.name}</div>
+                        <div class="file-details">
+                            ${storageManager.formatFileSize(file.size)} • ${new Date(file.uploadedAt).toLocaleDateString()}
+                        </div>
+                    </div>
+                    <button class="file-delete-btn" onclick="deleteStorageFile('${file.id}')">
+                        <i class="fas fa-trash-alt"></i>
+                    </button>
+                </div>
+            `).join('');
+        }
+    };
+    
+    storageManager.addListener(updateStorageDisplay);
 }
 
 function showAbout() {
@@ -3274,6 +3650,45 @@ function sendFriendRequest(targetUserId, targetUserPhone) {
             console.error('❌ Error enviando solicitud:', error);
             showErrorMessage(`Error enviando solicitud: ${error.message}`);
         });
+}
+
+// Funciones de gestión de almacenamiento
+
+function closeStorageSettings() {
+    const storageScreen = document.getElementById('storage-settings-screen');
+    if (storageScreen) {
+        document.body.removeChild(storageScreen);
+        switchScreen('settings');
+    }
+}
+
+function cleanupOldFiles() {
+    const result = storageManager.cleanupOldFiles(30);
+    if (result.cleanedCount === 0) {
+        showInstantNotification('🧹 No hay archivos antiguos para limpiar', 'friend-request');
+    }
+}
+
+function clearImageCache() {
+    const images = storageManager.getFilesByType('image');
+    let totalSize = 0;
+    
+    images.forEach(image => {
+        totalSize += image.size;
+        storageManager.removeFile(image.id);
+    });
+    
+    if (images.length > 0) {
+        showInstantNotification(`🗑️ ${images.length} imágenes eliminadas (${storageManager.formatFileSize(totalSize)} liberados)`, 'friend-request');
+    } else {
+        showInstantNotification('📷 No hay imágenes en caché para eliminar', 'friend-request');
+    }
+}
+
+function deleteStorageFile(fileId) {
+    if (confirm('¿Estás seguro de que quieres eliminar este archivo?')) {
+        storageManager.removeFile(fileId);
+    }
 }
 
 // Funciones para llamadas en tiempo real
