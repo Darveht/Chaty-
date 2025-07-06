@@ -27,6 +27,25 @@ let currentScreen = 'intro';
 let userLanguage = detectDeviceLanguage();
 let currentChatContact = null;
 let currentUser = null;
+
+// Inicializar usuario desde localStorage si existe
+function initializeUser() {
+    const savedUser = localStorage.getItem('uberchat_user');
+    if (savedUser) {
+        try {
+            currentUser = JSON.parse(savedUser);
+            console.log('Usuario cargado desde localStorage:', currentUser);
+        } catch (error) {
+            console.error('Error cargando usuario desde localStorage:', error);
+            localStorage.removeItem('uberchat_user');
+        }
+    }
+}
+
+// Llamar al cargar la página
+document.addEventListener('DOMContentLoaded', () => {
+    initializeUser();
+});
 let verificationCode = '';
 let typingTimer = null;
 let isTyping = false;
@@ -1469,10 +1488,13 @@ function closeSuccessModal() {
 
 // Función para mostrar secciones de navegación
 function showSection(section) {
-    // Ocultar todas las pantallas
-    document.querySelectorAll('.screen').forEach(screen => {
-        screen.classList.remove('active');
-    });
+    console.log('Navegando a sección:', section);
+    
+    // Limpiar listeners anteriores si es necesario
+    if (section !== 'moments' && momentsListener) {
+        momentsListener.off();
+        momentsListener = null;
+    }
     
     // Actualizar navegación
     document.querySelectorAll('.nav-item').forEach(item => {
@@ -1489,8 +1511,12 @@ function showSection(section) {
             showTranslateSection();
             break;
         case 'moments':
+            console.log('Cargando pantalla de momentos...');
             switchScreen('moments');
-            loadMoments();
+            // Pequeño delay para asegurar que la pantalla esté visible
+            setTimeout(() => {
+                loadMoments();
+            }, 100);
             break;
         case 'calls':
             switchScreen('calls-history');
@@ -1503,7 +1529,10 @@ function showSection(section) {
     }
     
     // Marcar como activo
-    document.querySelector(`.nav-item[onclick="showSection('${section}')"]`)?.classList.add('active');
+    const activeNavItem = document.querySelector(`.nav-item[onclick="showSection('${section}')"]`);
+    if (activeNavItem) {
+        activeNavItem.classList.add('active');
+    }
 }
 
 // Limpiar listeners cuando se sale de un chat
@@ -2504,10 +2533,22 @@ function toggleCallNotifications(toggle) {
 
 // Función para cargar momentos desde Firebase con animaciones mejoradas
 function loadMoments() {
-    if (!currentUser || !currentUser.uid) return;
+    console.log('🎬 Iniciando carga de momentos...');
     
-    console.log('🎬 Cargando momentos...');
     const momentsContainer = document.getElementById('moments-container');
+    if (!momentsContainer) {
+        console.error('No se encontró el contenedor de momentos');
+        return;
+    }
+    
+    // Verificar usuario actual
+    if (!currentUser || !currentUser.uid) {
+        console.log('Usuario no disponible, mostrando estado vacío');
+        showEmptyMoments();
+        return;
+    }
+    
+    console.log('Usuario actual:', currentUser.uid);
     
     // Mostrar indicador de carga animado estilo Uber
     momentsContainer.innerHTML = `
@@ -2525,46 +2566,55 @@ function loadMoments() {
     // Configurar listener para momentos en tiempo real
     if (momentsListener) {
         momentsListener.off();
+        momentsListener = null;
     }
     
-    momentsListener = database.ref('moments').orderByChild('timestamp').limitToLast(50);
-    
-    // Listener para momentos existentes
-    momentsListener.on('value', (snapshot) => {
-        const momentsData = snapshot.val() || {};
-        const momentsList = Object.keys(momentsData).map(key => ({
-            id: key,
-            ...momentsData[key]
-        })).reverse(); // Más recientes primero
+    try {
+        // Configurar listener simple primero
+        momentsListener = database.ref('moments').orderByChild('timestamp').limitToLast(20);
         
-        if (momentsList.length === 0) {
+        momentsListener.once('value', (snapshot) => {
+            console.log('Datos de momentos recibidos:', snapshot.exists());
+            
+            const momentsData = snapshot.val() || {};
+            const momentsList = Object.keys(momentsData).map(key => ({
+                id: key,
+                ...momentsData[key]
+            })).reverse(); // Más recientes primero
+            
+            console.log('Momentos encontrados:', momentsList.length);
+            
+            if (momentsList.length === 0) {
+                showEmptyMoments();
+            } else {
+                displayMoments(momentsList);
+            }
+        }).catch(error => {
+            console.error('Error cargando momentos:', error);
             showEmptyMoments();
-        } else {
-            displayMoments(momentsList);
-        }
-    });
-    
-    // Listener para nuevos momentos en tiempo real
-    momentsListener.on('child_added', (snapshot) => {
-        const newMoment = {
-            id: snapshot.key,
-            ...snapshot.val()
-        };
+        });
         
-        // Animación de nuevo momento
-        showNewMomentAnimation(newMoment);
+        // Configurar listener en tiempo real después del primer load
+        setTimeout(() => {
+            setupRealtimeReactions();
+        }, 1000);
         
-        // Reproducir sonido de notificación
-        playMomentNotificationSound();
-    });
-    
-    // Listener para reacciones en tiempo real
-    setupRealtimeReactions();
+    } catch (error) {
+        console.error('Error configurando listeners de momentos:', error);
+        showEmptyMoments();
+    }
 }
 
 // Función para mostrar estado vacío de momentos
 function showEmptyMoments() {
+    console.log('Mostrando estado vacío de momentos');
     const momentsContainer = document.getElementById('moments-container');
+    
+    if (!momentsContainer) {
+        console.error('Contenedor de momentos no encontrado');
+        return;
+    }
+    
     momentsContainer.innerHTML = `
         <div class="empty-moments">
             <div class="empty-moments-icon">
