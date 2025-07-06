@@ -298,7 +298,10 @@ body {
     padding: 2rem;
     text-align: center;
     min-height: 100vh;
+    height: 100vh;
     box-sizing: border-box;
+    width: 100%;
+    position: relative;
 }
 
 .logo {
@@ -5263,43 +5266,72 @@ This CSS snippet adds styles for image upload progress indication.
     .intro-container, .register-container, .verification-container {
         padding: 1.5rem;
         justify-content: center;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        min-height: 100vh;
+        box-sizing: border-box;
     }
 
     .intro-container {
         gap: 1.5rem;
+        text-align: center;
     }
 
     .logo {
         margin-bottom: 1.5rem;
+        width: 100%;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
     }
 
     .logo h1 {
         font-size: 2rem;
+        text-align: center;
     }
 
     .logo i {
         font-size: 3.5rem;
+        text-align: center;
     }
 
     .intro-text {
         font-size: 1rem;
         margin-bottom: 1.5rem;
         max-width: 280px;
+        text-align: center;
+        width: 100%;
     }
 
     .language-selector {
         margin-bottom: 1.5rem;
         max-width: 280px;
+        width: 100%;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+    }
+
+    .language-selector label {
+        text-align: center;
+        width: 100%;
     }
 
     .language-selector select {
         max-width: 100%;
+        width: 100%;
+        text-align: center;
     }
 
     .primary-btn {
         min-width: 180px;
         width: 100%;
         max-width: 280px;
+        margin: 0 auto;
+        display: flex;
+        align-items: center;
+        justify-content: center;
     }
 
     .code-digit {
@@ -5346,6 +5378,69 @@ This CSS snippet adds styles for image upload progress indication.
 }
 
 @media (max-width: 480px) {
+    .intro-container {
+        padding: 1rem;
+        min-height: 100vh;
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        align-items: center;
+        text-align: center;
+        gap: 1rem;
+    }
+
+    .logo {
+        margin-bottom: 1rem;
+        width: 100%;
+    }
+
+    .logo h1 {
+        font-size: 1.8rem;
+        margin: 0;
+        text-align: center;
+    }
+
+    .logo i {
+        font-size: 3rem;
+        margin-bottom: 0.75rem;
+    }
+
+    .intro-text {
+        font-size: 0.95rem;
+        margin-bottom: 1rem;
+        max-width: 260px;
+        text-align: center;
+        line-height: 1.4;
+    }
+
+    .language-selector {
+        margin-bottom: 1rem;
+        max-width: 260px;
+        width: 100%;
+    }
+
+    .language-selector label {
+        font-size: 0.9rem;
+        text-align: center;
+        margin-bottom: 0.5rem;
+    }
+
+    .language-selector select {
+        font-size: 0.9rem;
+        padding: 0.875rem 1rem;
+        width: 100%;
+        text-align: center;
+    }
+
+    .primary-btn {
+        min-width: 160px;
+        width: 100%;
+        max-width: 260px;
+        padding: 0.875rem 1.5rem;
+        font-size: 0.95rem;
+        margin: 0 auto;
+    }
+
     .chat-header {
         padding: 0.75rem 1rem;
     }
