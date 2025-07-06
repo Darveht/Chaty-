@@ -1989,12 +1989,26 @@ function updatePrivacyUI() {
 }
 
 function showEditProfile() {
-    document.getElementById('edit-profile-modal').classList.add('show');
-    initializeSettings();
+    const modal = document.getElementById('edit-profile-modal');
+    if (modal) {
+        modal.style.display = 'flex';
+        setTimeout(() => {
+            modal.classList.add('show');
+        }, 10);
+        initializeSettings();
+    } else {
+        console.error('Modal de editar perfil no encontrado');
+    }
 }
 
 function hideEditProfile() {
-    document.getElementById('edit-profile-modal').classList.remove('show');
+    const modal = document.getElementById('edit-profile-modal');
+    if (modal) {
+        modal.classList.remove('show');
+        setTimeout(() => {
+            modal.style.display = 'none';
+        }, 300);
+    }
 }
 
 function changeProfileAvatar() {
