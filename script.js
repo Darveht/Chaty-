@@ -709,13 +709,14 @@ function loadUserContacts() {
             if (contactIds.length === 0) {
                 chatList.innerHTML = `
                     <div class="empty-state">
-                        <i class="fas fa-user-plus"></i>
-                        <h3>No hay contactos aún</h3>
-                        <p>Busca usuarios por número de teléfono para agregar contactos</p>
-                        <button class="primary-btn" onclick="showAddContact()">
-                            <i class="fas fa-plus"></i>
-                            Buscar contacto
-                        </button>
+                        <i class="fas fa-users"></i>
+                        <h3>¡Comienza a conectar!</h3>
+                        <p>Aún no tienes contactos agregados.</p>
+                        <p>Usa el botón <strong>+</strong> de arriba para buscar y agregar usuarios por su número de teléfono.</p>
+                        <div class="empty-state-tip">
+                            <i class="fas fa-lightbulb"></i>
+                            <span>Los usuarios deben estar registrados en UberChat para poder ser encontrados</span>
+                        </div>
                     </div>
                 `;
                 return;

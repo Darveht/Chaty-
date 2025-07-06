@@ -2912,6 +2912,31 @@ body {
 .empty-state p {
     font-size: 1rem;
     opacity: 0.8;
+    margin-bottom: 0.75rem;
+}
+
+.empty-state p:last-of-type {
+    margin-bottom: 1.5rem;
+}
+
+.empty-state-tip {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 1rem;
+    background: rgba(0, 168, 84, 0.1);
+    border-radius: var(--border-radius);
+    border-left: 3px solid var(--accent-color);
+    font-size: 0.9rem;
+    color: var(--text-secondary);
+    max-width: 300px;
+    text-align: left;
+}
+
+.empty-state-tip i {
+    color: var(--accent-color);
+    font-size: 1rem;
+    margin: 0;
 }
 
 /* Sistema de Moderación Automática */
