@@ -401,28 +401,144 @@
                 <button class="close-btn" onclick="hideAddContact()">
                     <i class="fas fa-arrow-left"></i>
                 </button>
-                <h3>Buscar contacto</h3>
+                <h3>Agregar Contactos</h3>
             </div>
             <div class="modal-body">
-                <p>Busca usuarios por su número de teléfono registrado en la plataforma</p>
-                <div class="phone-input-container">
-                    <div class="country-selector">
-                        <select id="contact-country">
-                            <option value="+34">España (+34)</option>
-                            <option value="+1">Estados Unidos (+1)</option>
-                            <option value="+52">México (+52)</option>
-                            <option value="+54">Argentina (+54)</option>
-                            <option value="+55">Brasil (+55)</option>
-                            <option value="+33">Francia (+33)</option>
-                            <option value="+49">Alemania (+49)</option>
-                        </select>
+                <!-- Sección de integración con redes sociales -->
+                <div class="social-integration-section">
+                    <h4>🌐 Conectar Redes Sociales</h4>
+                    <p class="section-description">Vincula tus cuentas para encontrar automáticamente a tus amigos</p>
+                    
+                    <div class="social-platforms">
+                        <div class="social-platform whatsapp" onclick="connectWhatsApp()">
+                            <div class="platform-icon">
+                                <i class="fab fa-whatsapp"></i>
+                            </div>
+                            <div class="platform-info">
+                                <h5>WhatsApp</h5>
+                                <p id="whatsapp-status">No conectado</p>
+                            </div>
+                            <div class="platform-action">
+                                <button class="connect-btn" id="whatsapp-btn">
+                                    <i class="fas fa-link"></i>
+                                    Conectar
+                                </button>
+                            </div>
+                        </div>
+
+                        <div class="social-platform facebook" onclick="connectFacebook()">
+                            <div class="platform-icon">
+                                <i class="fab fa-facebook"></i>
+                            </div>
+                            <div class="platform-info">
+                                <h5>Facebook</h5>
+                                <p id="facebook-status">No conectado</p>
+                            </div>
+                            <div class="platform-action">
+                                <button class="connect-btn" id="facebook-btn">
+                                    <i class="fas fa-link"></i>
+                                    Conectar
+                                </button>
+                            </div>
+                        </div>
+
+                        <div class="social-platform contacts" onclick="syncPhoneContacts()">
+                            <div class="platform-icon">
+                                <i class="fas fa-address-book"></i>
+                            </div>
+                            <div class="platform-info">
+                                <h5>Contactos del Dispositivo</h5>
+                                <p id="contacts-status">No sincronizado</p>
+                            </div>
+                            <div class="platform-action">
+                                <button class="connect-btn" id="contacts-btn">
+                                    <i class="fas fa-sync"></i>
+                                    Sincronizar
+                                </button>
+                            </div>
+                        </div>
                     </div>
-                    <input type="tel" id="contact-phone" placeholder="Número de teléfono" maxlength="15">
+
+                    <div class="sync-results" id="sync-results" style="display: none;">
+                        <div class="results-header">
+                            <i class="fas fa-users"></i>
+                            <h5>Contactos Encontrados</h5>
+                        </div>
+                        <div class="found-contacts" id="found-contacts"></div>
+                    </div>
+                </div>
+
+                <!-- Divider -->
+                <div class="section-divider">
+                    <hr>
+                    <span>O</span>
+                    <hr>
+                </div>
+
+                <!-- Sección de búsqueda manual -->
+                <div class="manual-search-section">
+                    <h4>🔍 Búsqueda Manual</h4>
+                    <p class="section-description">Busca usuarios por su número de teléfono registrado</p>
+                    
+                    <div class="search-input-container">
+                        <div class="country-phone-wrapper">
+                            <button class="country-selector-btn" id="contact-country-selector" onclick="openContactCountryModal()">
+                                <div class="selected-country">
+                                    <span class="country-flag">🇪🇸</span>
+                                    <span class="country-code">+34</span>
+                                </div>
+                                <i class="fas fa-chevron-down"></i>
+                            </button>
+                            <div class="phone-input-wrapper">
+                                <input type="tel" id="contact-phone" placeholder="Número de teléfono" maxlength="15">
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="search-suggestions" id="search-suggestions">
+                        <div class="suggestion-item">
+                            <i class="fas fa-lightbulb"></i>
+                            <span>El usuario debe estar registrado en UberChat</span>
+                        </div>
+                        <div class="suggestion-item">
+                            <i class="fas fa-globe"></i>
+                            <span>Incluye el código de país completo</span>
+                        </div>
+                    </div>
                 </div>
             </div>
             <div class="modal-footer">
-                <button class="secondary-btn" onclick="hideAddContact()">Cancelar</button>
-                <button class="primary-btn" onclick="addContact()">Buscar</button>
+                <button class="secondary-btn" onclick="hideAddContact()">
+                    <i class="fas fa-times"></i>
+                    Cancelar
+                </button>
+                <button class="primary-btn" onclick="addContact()" id="manual-search-btn">
+                    <i class="fas fa-search"></i>
+                    Buscar Usuario
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal de selección de país para contactos -->
+    <div id="contact-country-modal" class="country-modal" onclick="closeContactCountryModal()">
+        <div class="country-modal-content" onclick="event.stopPropagation()">
+            <div class="country-modal-header">
+                <button class="modal-close-btn" onclick="closeContactCountryModal()">
+                    <i class="fas fa-times"></i>
+                </button>
+                <h3>Selecciona el país</h3>
+            </div>
+            
+            <div class="country-search-container">
+                <div class="search-input-wrapper">
+                    <i class="fas fa-search"></i>
+                    <input type="text" id="contact-country-search" placeholder="Buscar país..." oninput="filterContactCountries()">
+                </div>
+            </div>
+
+            <div class="countries-list" id="contact-countries-list">
+                <!-- Los países se cargarán dinámicamente -->
             </div>
         </div>
     </div>

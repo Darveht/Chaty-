@@ -2629,9 +2629,409 @@ function hideAddContact() {
     document.getElementById('add-contact-modal').classList.remove('show');
 }
 
+// Funciones para integración con redes sociales
+function connectWhatsApp() {
+    const btn = document.getElementById('whatsapp-btn');
+    const status = document.getElementById('whatsapp-status');
+    
+    if (socialConnections.whatsapp.connected) {
+        // Desconectar WhatsApp
+        socialConnections.whatsapp.connected = false;
+        socialConnections.whatsapp.contacts = [];
+        
+        btn.innerHTML = '<i class="fas fa-link"></i> Conectar';
+        btn.classList.remove('connected');
+        status.textContent = 'No conectado';
+        
+        showInstantNotification('WhatsApp desconectado', 'friend-request');
+        return;
+    }
+    
+    // Mostrar proceso de conexión
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Conectando...';
+    btn.disabled = true;
+    
+    // Simular proceso de autorización de WhatsApp
+    setTimeout(() => {
+        // Simular éxito en la conexión
+        socialConnections.whatsapp.connected = true;
+        
+        // Generar contactos simulados de WhatsApp
+        const mockWhatsAppContacts = [
+            { name: 'María García', phone: '+34612345678', platform: 'WhatsApp' },
+            { name: 'Carlos López', phone: '+34687654321', platform: 'WhatsApp' },
+            { name: 'Ana Martínez', phone: '+34655444333', platform: 'WhatsApp' },
+            { name: 'David Rodríguez', phone: '+34699888777', platform: 'WhatsApp' }
+        ];
+        
+        socialConnections.whatsapp.contacts = mockWhatsAppContacts;
+        
+        // Actualizar UI
+        btn.innerHTML = '<i class="fas fa-check"></i> Conectado';
+        btn.classList.add('connected');
+        btn.disabled = false;
+        status.textContent = `${mockWhatsAppContacts.length} contactos encontrados`;
+        
+        // Mostrar resultados
+        showSyncResults(mockWhatsAppContacts);
+        
+        showInstantNotification(`✅ WhatsApp conectado - ${mockWhatsAppContacts.length} contactos encontrados`, 'friend-request');
+        
+    }, 2000);
+}
+
+function connectFacebook() {
+    const btn = document.getElementById('facebook-btn');
+    const status = document.getElementById('facebook-status');
+    
+    if (socialConnections.facebook.connected) {
+        // Desconectar Facebook
+        socialConnections.facebook.connected = false;
+        socialConnections.facebook.contacts = [];
+        
+        btn.innerHTML = '<i class="fas fa-link"></i> Conectar';
+        btn.classList.remove('connected');
+        status.textContent = 'No conectado';
+        
+        showInstantNotification('Facebook desconectado', 'friend-request');
+        return;
+    }
+    
+    // Mostrar proceso de conexión
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Conectando...';
+    btn.disabled = true;
+    
+    // Simular proceso de autorización de Facebook
+    setTimeout(() => {
+        // Simular éxito en la conexión
+        socialConnections.facebook.connected = true;
+        
+        // Generar contactos simulados de Facebook
+        const mockFacebookContacts = [
+            { name: 'Laura Fernández', phone: '+34611222333', platform: 'Facebook' },
+            { name: 'Miguel Santos', phone: '+34622333444', platform: 'Facebook' },
+            { name: 'Elena Morales', phone: '+34633444555', platform: 'Facebook' },
+            { name: 'Javier Ruiz', phone: '+34644555666', platform: 'Facebook' },
+            { name: 'Isabel Jiménez', phone: '+34655666777', platform: 'Facebook' }
+        ];
+        
+        socialConnections.facebook.contacts = mockFacebookContacts;
+        
+        // Actualizar UI
+        btn.innerHTML = '<i class="fas fa-check"></i> Conectado';
+        btn.classList.add('connected');
+        btn.disabled = false;
+        status.textContent = `${mockFacebookContacts.length} contactos encontrados`;
+        
+        // Mostrar resultados
+        showSyncResults(mockFacebookContacts);
+        
+        showInstantNotification(`✅ Facebook conectado - ${mockFacebookContacts.length} contactos encontrados`, 'friend-request');
+        
+    }, 2500);
+}
+
+function syncPhoneContacts() {
+    const btn = document.getElementById('contacts-btn');
+    const status = document.getElementById('contacts-status');
+    
+    if (socialConnections.phoneContacts.synced) {
+        // Dessincronizar contactos
+        socialConnections.phoneContacts.synced = false;
+        socialConnections.phoneContacts.contacts = [];
+        
+        btn.innerHTML = '<i class="fas fa-sync"></i> Sincronizar';
+        btn.classList.remove('connected');
+        status.textContent = 'No sincronizado';
+        
+        showInstantNotification('Contactos del dispositivo dessincronizados', 'friend-request');
+        return;
+    }
+    
+    // Mostrar proceso de sincronización
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Sincronizando...';
+    btn.disabled = true;
+    
+    // Simular acceso a contactos del dispositivo
+    setTimeout(() => {
+        // Simular éxito en la sincronización
+        socialConnections.phoneContacts.synced = true;
+        
+        // Generar contactos simulados del dispositivo
+        const mockPhoneContacts = [
+            { name: 'Roberto Díaz', phone: '+34666777888', platform: 'Contactos' },
+            { name: 'Carmen Vega', phone: '+34677888999', platform: 'Contactos' },
+            { name: 'Francisco Torres', phone: '+34688999000', platform: 'Contactos' },
+            { name: 'Lucía Herrera', phone: '+34699000111', platform: 'Contactos' },
+            { name: 'Andrés Molina', phone: '+34600111222', platform: 'Contactos' },
+            { name: 'Silvia Castro', phone: '+34611222333', platform: 'Contactos' }
+        ];
+        
+        socialConnections.phoneContacts.contacts = mockPhoneContacts;
+        
+        // Actualizar UI
+        btn.innerHTML = '<i class="fas fa-check"></i> Sincronizado';
+        btn.classList.add('connected');
+        btn.disabled = false;
+        status.textContent = `${mockPhoneContacts.length} contactos sincronizados`;
+        
+        // Mostrar resultados
+        showSyncResults(mockPhoneContacts);
+        
+        showInstantNotification(`✅ Contactos sincronizados - ${mockPhoneContacts.length} contactos encontrados`, 'friend-request');
+        
+    }, 1500);
+}
+
+function showSyncResults(contacts) {
+    const resultsContainer = document.getElementById('sync-results');
+    const foundContactsContainer = document.getElementById('found-contacts');
+    
+    // Limpiar resultados anteriores
+    foundContactsContainer.innerHTML = '';
+    
+    if (contacts.length > 0) {
+        contacts.forEach(contact => {
+            const contactItem = document.createElement('div');
+            contactItem.className = 'found-contact-item';
+            contactItem.innerHTML = `
+                <div class="found-contact-avatar">
+                    <i class="fas fa-user"></i>
+                </div>
+                <div class="found-contact-info">
+                    <div class="found-contact-name">${contact.name}</div>
+                    <div class="found-contact-platform">
+                        ${contact.platform} • ${contact.phone}
+                    </div>
+                </div>
+                <button class="add-contact-btn" onclick="addSocialContact('${contact.phone}', '${contact.name}')">
+                    <i class="fas fa-plus"></i>
+                    Agregar
+                </button>
+            `;
+            foundContactsContainer.appendChild(contactItem);
+        });
+        
+        resultsContainer.style.display = 'block';
+        
+        // Hacer scroll hacia los resultados
+        setTimeout(() => {
+            resultsContainer.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+        }, 100);
+    }
+}
+
+function addSocialContact(phone, name) {
+    console.log(`Agregando contacto social: ${name} (${phone})`);
+    
+    // Buscar usuario en Firebase por número de teléfono
+    const phoneKey = phone.replace(/\D/g, '');
+    database.ref('phoneNumbers/' + phoneKey).once('value')
+        .then(phoneSnapshot => {
+            if (phoneSnapshot.exists()) {
+                const phoneData = phoneSnapshot.val();
+                const userId = phoneData.userId;
+                
+                // Obtener datos completos del usuario
+                return database.ref('users/' + userId).once('value');
+            } else {
+                throw new Error('Usuario no encontrado en UberChat');
+            }
+        })
+        .then(snapshot => {
+            if (snapshot.val()) {
+                const userId = snapshot.key;
+                const user = snapshot.val();
+                user.uid = userId;
+                
+                // Verificar si ya son contactos
+                return database.ref(`contacts/${currentUser.uid}/${userId}`).once('value')
+                    .then(contactSnapshot => {
+                        if (contactSnapshot.exists()) {
+                            showInstantNotification(`${name} ya está en tu lista de contactos`, 'friend-request');
+                        } else {
+                            // Enviar solicitud de amistad
+                            sendFriendRequest(userId, user.phoneNumber);
+                            showInstantNotification(`Solicitud enviada a ${name}`, 'friend-request');
+                        }
+                    });
+            } else {
+                throw new Error('Datos de usuario no válidos');
+            }
+        })
+        .catch(error => {
+            console.error('Error agregando contacto social:', error);
+            showInstantNotification(`${name} no está registrado en UberChat`, 'friend-request');
+        });
+}
+
+// Funciones para el selector de país de contactos
+function openContactCountryModal() {
+    const modal = document.getElementById('contact-country-modal');
+    const btn = document.getElementById('contact-country-selector');
+    
+    // Llenar la lista de países
+    loadContactCountriesList();
+    
+    // Mostrar modal
+    modal.style.display = 'flex';
+    btn.classList.add('active');
+    
+    setTimeout(() => {
+        modal.classList.add('show');
+        const searchInput = document.getElementById('contact-country-search');
+        if (searchInput) {
+            searchInput.focus();
+        }
+    }, 10);
+}
+
+function closeContactCountryModal() {
+    const modal = document.getElementById('contact-country-modal');
+    const btn = document.getElementById('contact-country-selector');
+    
+    modal.classList.remove('show');
+    btn.classList.remove('active');
+    
+    setTimeout(() => {
+        modal.style.display = 'none';
+    }, 300);
+    
+    // Limpiar búsqueda
+    const searchInput = document.getElementById('contact-country-search');
+    if (searchInput) {
+        searchInput.value = '';
+        filterContactCountries();
+    }
+}
+
+function loadContactCountriesList() {
+    const countriesList = document.getElementById('contact-countries-list');
+    countriesList.innerHTML = '';
+    
+    // Países populares primero
+    const popularCountries = countries.filter(country => country.popular);
+    const otherCountries = countries.filter(country => !country.popular);
+    
+    if (popularCountries.length > 0) {
+        const popularHeader = document.createElement('div');
+        popularHeader.innerHTML = `
+            <div style="padding: 0.75rem 2rem; background: var(--surface); font-weight: 600; font-size: 0.8rem; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.5px;">
+                Países populares
+            </div>
+        `;
+        countriesList.appendChild(popularHeader);
+        
+        popularCountries.forEach(country => {
+            countriesList.appendChild(createContactCountryItem(country));
+        });
+        
+        const separator = document.createElement('div');
+        separator.style.cssText = 'height: 8px; background: var(--surface); margin: 0.5rem 0;';
+        countriesList.appendChild(separator);
+    }
+    
+    // Todos los países ordenados
+    const allCountriesSorted = [...countries].sort((a, b) => a.name.localeCompare(b.name));
+    allCountriesSorted.forEach(country => {
+        countriesList.appendChild(createContactCountryItem(country));
+    });
+}
+
+function createContactCountryItem(country) {
+    const item = document.createElement('div');
+    item.className = 'country-item';
+    item.dataset.countryName = country.name.toLowerCase();
+    item.dataset.countryCode = country.code;
+    
+    if (selectedContactCountry.code === country.code && selectedContactCountry.name === country.name) {
+        item.classList.add('selected');
+    }
+    
+    item.innerHTML = `
+        <div class="country-item-flag">${country.flag}</div>
+        <div class="country-item-info">
+            <div class="country-item-name">${country.name}</div>
+            <div class="country-item-code">${country.code}</div>
+        </div>
+    `;
+    
+    item.onclick = () => selectContactCountry(country);
+    
+    return item;
+}
+
+function selectContactCountry(country) {
+    selectedContactCountry = country;
+    
+    // Actualizar UI del selector
+    const flagElement = document.querySelector('#contact-country-selector .country-flag');
+    const codeElement = document.querySelector('#contact-country-selector .country-code');
+    
+    if (flagElement && codeElement) {
+        flagElement.textContent = country.flag;
+        codeElement.textContent = country.code;
+    }
+    
+    // Cerrar modal
+    closeContactCountryModal();
+    
+    // Enfocar en el input de teléfono
+    setTimeout(() => {
+        document.getElementById('contact-phone').focus();
+    }, 300);
+    
+    console.log('País de contacto seleccionado:', country);
+}
+
+function filterContactCountries() {
+    const searchTerm = document.getElementById('contact-country-search').value.toLowerCase();
+    const countryItems = document.querySelectorAll('#contact-countries-list .country-item');
+    let hasResults = false;
+    
+    countryItems.forEach(item => {
+        const countryName = item.dataset.countryName;
+        const countryCode = item.dataset.countryCode.toLowerCase();
+        
+        if (countryName.includes(searchTerm) || countryCode.includes(searchTerm)) {
+            item.classList.remove('hidden');
+            hasResults = true;
+        } else {
+            item.classList.add('hidden');
+        }
+    });
+    
+    // Mostrar mensaje de no resultados
+    const existingNoResults = document.querySelector('#contact-countries-list .no-results');
+    if (existingNoResults) {
+        existingNoResults.remove();
+    }
+    
+    if (!hasResults && searchTerm.length > 0) {
+        const noResults = document.createElement('div');
+        noResults.className = 'no-results';
+        noResults.innerHTML = `
+            <i class="fas fa-search"></i>
+            <h4>No se encontraron países</h4>
+            <p>Intenta con otro término de búsqueda</p>
+        `;
+        document.getElementById('contact-countries-list').appendChild(noResults);
+    }
+}
+
 // Variables para el sistema de solicitudes
 let friendRequestsListener = null;
 let pendingRequests = new Map();
+
+// Variables para integración de redes sociales
+let socialConnections = {
+    whatsapp: { connected: false, contacts: [] },
+    facebook: { connected: false, contacts: [] },
+    phoneContacts: { synced: false, contacts: [] }
+};
+
+// Variable para selector de país de contactos
+let selectedContactCountry = { name: 'España', code: '+34', flag: '🇪🇸' };
 
 // Función para agregar contacto
 function addContact() {
@@ -2642,8 +3042,8 @@ function addContact() {
         return;
     }
 
-    // Normalizar número de teléfono
-    const countryCode = document.getElementById('contact-country').value || '+34';
+    // Normalizar número de teléfono usando el país seleccionado
+    const countryCode = selectedContactCountry.code;
     const cleanPhone = phone.replace(/\D/g, '');
     const fullNumber = cleanPhone.startsWith(countryCode.replace('+', '')) ? 
         '+' + cleanPhone : countryCode + cleanPhone;
@@ -2651,7 +3051,7 @@ function addContact() {
     console.log('Buscando contacto:', fullNumber);
 
     // Mostrar indicador de búsqueda
-    const addBtn = document.querySelector('#add-contact-modal .primary-btn');
+    const addBtn = document.getElementById('manual-search-btn');
     const originalText = addBtn.innerHTML;
     addBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Buscando...';
     addBtn.disabled = true;
