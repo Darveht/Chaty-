@@ -720,48 +720,83 @@ function requestLoginApproval(phoneNumber, existingUserId, existingSessionId) {
     const deviceInfo = getDeviceFingerprint();
     const loginRequestId = Date.now().toString();
 
-    console.log('Enviando solicitud de aprobación para:', phoneNumber, 'a usuario:', existingUserId);
+    console.log('🔐 Enviando solicitud de aprobación para:', phoneNumber, 'a usuario:', existingUserId);
 
     // Crear solicitud de aprobación en Firebase
     const approvalRequest = {
         id: loginRequestId,
         phoneNumber: phoneNumber,
         requestingDevice: deviceInfo,
-        timestamp: Date.now(), // Usar timestamp directo
+        timestamp: firebase.database.ServerValue.TIMESTAMP,
         status: 'pending',
         approvedBy: null,
         existingUserId: existingUserId,
         existingSessionId: existingSessionId
     };
 
-    // Enviar solicitud principal
+    // Enviar solicitud principal con múltiples rutas para asegurar entrega
     const approvalPromise = database.ref(`loginApprovals/${existingUserId}/${loginRequestId}`).set(approvalRequest);
     
-    // Crear notificación directa para el usuario autorizado
+    // Crear notificación directa con timestamp del servidor
     const notificationData = {
         type: 'login_approval_request',
         from: 'security_system',
         requestId: loginRequestId,
         phoneNumber: phoneNumber,
         deviceInfo: deviceInfo,
-        timestamp: Date.now(),
-        read: false
+        timestamp: firebase.database.ServerValue.TIMESTAMP,
+        read: false,
+        urgent: true
     };
     
     const notificationPromise = database.ref(`notifications/${existingUserId}`).push(notificationData);
     
-    // Actualizar flag de solicitud pendiente en el perfil del usuario
+    // Activar múltiples flags para asegurar detección
     const flagPromise = database.ref(`users/${existingUserId}/pendingLoginApproval`).set({
         requestId: loginRequestId,
         fromDevice: deviceInfo,
-        timestamp: Date.now(),
-        phoneNumber: phoneNumber
+        timestamp: firebase.database.ServerValue.TIMESTAMP,
+        phoneNumber: phoneNumber,
+        urgent: true
     });
 
-    Promise.all([approvalPromise, notificationPromise, flagPromise])
+    // Crear flag global adicional
+    const globalFlagPromise = database.ref(`globalLoginRequests/${loginRequestId}`).set({
+        targetUser: existingUserId,
+        fromDevice: deviceInfo,
+        phoneNumber: phoneNumber,
+        timestamp: firebase.database.ServerValue.TIMESTAMP,
+        status: 'pending'
+    });
+
+    // Trigger inmediato para usuarios online
+    const triggerPromise = database.ref(`users/${existingUserId}/lastLoginRequest`).set({
+        requestId: loginRequestId,
+        timestamp: firebase.database.ServerValue.TIMESTAMP,
+        trigger: Date.now()
+    });
+
+    Promise.all([approvalPromise, notificationPromise, flagPromise, globalFlagPromise, triggerPromise])
         .then(() => {
-            console.log('✅ Solicitud de aprobación enviada exitosamente');
+            console.log('✅ Solicitud de aprobación enviada por múltiples canales');
             showLoginRequestPending(deviceInfo);
+
+            // Verificar si el usuario está online y forzar notificación
+            return database.ref(`users/${existingUserId}/status`).once('value');
+        })
+        .then((statusSnapshot) => {
+            const userStatus = statusSnapshot.val();
+            console.log(`📊 Estado del usuario destinatario: ${userStatus}`);
+            
+            if (userStatus === 'online') {
+                // Usuario online - enviar pulse adicional
+                database.ref(`users/${existingUserId}/alertPulse`).set({
+                    type: 'login_request',
+                    requestId: loginRequestId,
+                    timestamp: Date.now()
+                });
+                console.log('🟢 Usuario online - enviado pulse adicional');
+            }
 
             // Escuchar respuesta de aprobación
             listenForApprovalResponse(existingUserId, loginRequestId, phoneNumber);
@@ -1493,60 +1528,105 @@ function createActiveSession(userId, phoneNumber) {
 
 // Función para configurar listener de solicitudes de aprobación
 function setupLoginApprovalListener(userId) {
-    console.log('Configurando listener de aprobaciones para:', userId);
+    console.log('🔧 Configurando listener de aprobaciones para:', userId);
     
-    // Limpiar listener anterior
+    // Limpiar listeners anteriores
     if (sessionManager.loginAttemptListener) {
         sessionManager.loginAttemptListener.off();
         sessionManager.loginAttemptListener = null;
     }
 
-    // Listener principal para solicitudes de aprobación
+    // 1. Listener principal para solicitudes de aprobación
     sessionManager.loginAttemptListener = database.ref(`loginApprovals/${userId}`);
     sessionManager.loginAttemptListener.on('child_added', (snapshot) => {
         const approval = snapshot.val();
         const approvalId = snapshot.key;
         
-        console.log('Nueva solicitud de aprobación detectada:', approval);
+        console.log('🚨 Nueva solicitud de aprobación detectada:', approval);
         
         if (approval && approval.status === 'pending') {
-            // Verificar que no sea una solicitud antigua (últimos 5 minutos)
-            const requestTime = approval.timestamp;
-            const now = Date.now();
-            const fiveMinutesAgo = now - (5 * 60 * 1000);
-            
-            if (requestTime > fiveMinutesAgo) {
-                console.log('Mostrando modal de aprobación para solicitud reciente');
-                showDeviceApprovalModal(approval, approvalId, userId);
-            } else {
-                console.log('Solicitud demasiado antigua, ignorando');
-            }
+            console.log('✅ Mostrando modal de aprobación inmediatamente');
+            showDeviceApprovalModal(approval, approvalId, userId);
         }
     });
 
-    // Listener adicional para flag de solicitud pendiente
+    // 2. Listener para flag urgente de solicitud pendiente
     database.ref(`users/${userId}/pendingLoginApproval`).on('value', (snapshot) => {
         const pendingApproval = snapshot.val();
-        if (pendingApproval && pendingApproval.requestId) {
-            console.log('Solicitud pendiente detectada via flag de usuario:', pendingApproval);
+        if (pendingApproval && pendingApproval.requestId && pendingApproval.urgent) {
+            console.log('🔥 Solicitud URGENTE detectada via flag:', pendingApproval);
             
-            // Verificar si es reciente
-            if (Date.now() - pendingApproval.timestamp < 300000) { // 5 minutos
-                // Buscar la solicitud completa
-                database.ref(`loginApprovals/${userId}/${pendingApproval.requestId}`).once('value')
-                    .then(approvalSnapshot => {
-                        if (approvalSnapshot.exists()) {
-                            const approval = approvalSnapshot.val();
-                            if (approval.status === 'pending') {
-                                showDeviceApprovalModal(approval, pendingApproval.requestId, userId);
-                            }
+            // Buscar la solicitud completa inmediatamente
+            database.ref(`loginApprovals/${userId}/${pendingApproval.requestId}`).once('value')
+                .then(approvalSnapshot => {
+                    if (approvalSnapshot.exists()) {
+                        const approval = approvalSnapshot.val();
+                        if (approval.status === 'pending') {
+                            showDeviceApprovalModal(approval, pendingApproval.requestId, userId);
                         }
-                    });
-            }
+                    }
+                });
         }
     });
 
-    console.log('Listeners de aprobación configurados correctamente');
+    // 3. Listener para trigger de último request
+    database.ref(`users/${userId}/lastLoginRequest`).on('value', (snapshot) => {
+        const lastRequest = snapshot.val();
+        if (lastRequest && lastRequest.requestId) {
+            console.log('🎯 Trigger de último request detectado:', lastRequest);
+            
+            // Buscar solicitud por ID
+            database.ref(`loginApprovals/${userId}/${lastRequest.requestId}`).once('value')
+                .then(approvalSnapshot => {
+                    if (approvalSnapshot.exists()) {
+                        const approval = approvalSnapshot.val();
+                        if (approval.status === 'pending') {
+                            showDeviceApprovalModal(approval, lastRequest.requestId, userId);
+                        }
+                    }
+                });
+        }
+    });
+
+    // 4. Listener para pulsos de alerta (usuarios online)
+    database.ref(`users/${userId}/alertPulse`).on('value', (snapshot) => {
+        const pulse = snapshot.val();
+        if (pulse && pulse.type === 'login_request') {
+            console.log('⚡ Pulse de alerta recibido:', pulse);
+            showInstantNotification('🔐 Nueva solicitud de acceso detectada', 'friend-request');
+            
+            // Buscar solicitud
+            database.ref(`loginApprovals/${userId}/${pulse.requestId}`).once('value')
+                .then(approvalSnapshot => {
+                    if (approvalSnapshot.exists()) {
+                        const approval = approvalSnapshot.val();
+                        if (approval.status === 'pending') {
+                            showDeviceApprovalModal(approval, pulse.requestId, userId);
+                        }
+                    }
+                });
+        }
+    });
+
+    // 5. Listener global de respaldo
+    database.ref(`globalLoginRequests`).orderByChild('targetUser').equalTo(userId).on('child_added', (snapshot) => {
+        const globalRequest = snapshot.val();
+        const requestId = snapshot.key;
+        
+        if (globalRequest && globalRequest.status === 'pending') {
+            console.log('🌍 Solicitud detectada via listener global:', globalRequest);
+            
+            database.ref(`loginApprovals/${userId}/${requestId}`).once('value')
+                .then(approvalSnapshot => {
+                    if (approvalSnapshot.exists()) {
+                        const approval = approvalSnapshot.val();
+                        showDeviceApprovalModal(approval, requestId, userId);
+                    }
+                });
+        }
+    });
+
+    console.log('✅ Listeners de aprobación configurados con múltiples canales');
 }
 
 // Función para mostrar pantalla completa de aprobación de dispositivo
@@ -2693,51 +2773,65 @@ function sendFriendRequest(targetUserId, targetUserPhone) {
         fromAvatar: currentUser.avatar || `https://api.dicebear.com/7.x/avataaars/svg?seed=${currentUser.phoneNumber}`,
         to: targetUserId,
         toPhone: targetUserPhone,
-        timestamp: Date.now(),
+        timestamp: firebase.database.ServerValue.TIMESTAMP,
         status: 'pending'
     };
 
     // Cerrar tarjeta de usuario
     closeUserFoundCard();
 
-    console.log('📤 Enviando solicitud de amistad:', requestData);
+    console.log('📤 Enviando solicitud de amistad con múltiples canales:', requestData);
 
     // Mostrar loading
     showInstantNotification('📤 Enviando solicitud...', 'friend-request');
 
-    // Enviar solicitud principal PRIMERO
-    database.ref(`friendRequests/${targetUserId}/${requestId}`).set(requestData)
+    // 1. Enviar solicitud principal
+    const requestPromise = database.ref(`friendRequests/${targetUserId}/${requestId}`).set(requestData);
+    
+    // 2. Crear notificación directa con timestamp del servidor
+    const notificationData = {
+        type: 'friend_request',
+        from: currentUser.uid,
+        fromPhone: currentUser.phoneNumber,
+        fromAvatar: currentUser.avatar || `https://api.dicebear.com/7.x/avataaars/svg?seed=${currentUser.phoneNumber}`,
+        requestId: requestId,
+        timestamp: firebase.database.ServerValue.TIMESTAMP,
+        read: false,
+        urgent: true
+    };
+    const notificationPromise = database.ref(`notifications/${targetUserId}`).push(notificationData);
+    
+    // 3. Activar flag urgente
+    const flagPromise = database.ref(`users/${targetUserId}/pendingFriendRequest`).set({
+        type: 'friend_request',
+        from: currentUser.phoneNumber,
+        fromUser: currentUser.uid,
+        timestamp: firebase.database.ServerValue.TIMESTAMP,
+        requestId: requestId,
+        urgent: true
+    });
+
+    // 4. Crear registro global
+    const globalPromise = database.ref(`globalFriendRequests/${requestId}`).set({
+        targetUser: targetUserId,
+        fromUser: currentUser.uid,
+        fromPhone: currentUser.phoneNumber,
+        timestamp: firebase.database.ServerValue.TIMESTAMP,
+        status: 'pending'
+    });
+
+    // 5. Actualizar último request en perfil del destinatario
+    const lastRequestPromise = database.ref(`users/${targetUserId}/lastFriendRequest`).set({
+        requestId: requestId,
+        from: currentUser.uid,
+        fromPhone: currentUser.phoneNumber,
+        timestamp: firebase.database.ServerValue.TIMESTAMP,
+        trigger: Date.now()
+    });
+
+    Promise.all([requestPromise, notificationPromise, flagPromise, globalPromise, lastRequestPromise])
         .then(() => {
-            console.log('✅ Solicitud principal guardada en Firebase');
-            
-            // Crear notificación directa inmediatamente
-            const notificationData = {
-                type: 'friend_request',
-                from: currentUser.uid,
-                fromPhone: currentUser.phoneNumber,
-                fromAvatar: currentUser.avatar || `https://api.dicebear.com/7.x/avataaars/svg?seed=${currentUser.phoneNumber}`,
-                requestId: requestId,
-                timestamp: Date.now(),
-                read: false
-            };
-            
-            return database.ref(`notifications/${targetUserId}`).push(notificationData);
-        })
-        .then(() => {
-            console.log('✅ Notificación directa enviada');
-            
-            // Actualizar flag inmediato para trigger de listener
-            return database.ref(`users/${targetUserId}/pendingFriendRequest`).set({
-                type: 'friend_request',
-                from: currentUser.phoneNumber,
-                fromUser: currentUser.uid,
-                timestamp: Date.now(),
-                requestId: requestId,
-                urgent: true
-            });
-        })
-        .then(() => {
-            console.log('✅ Flag de notificación urgente activado');
+            console.log('✅ Solicitud enviada por múltiples canales');
             
             // Verificar estado del usuario destinatario
             return database.ref(`users/${targetUserId}/status`).once('value');
@@ -2747,10 +2841,17 @@ function sendFriendRequest(targetUserId, targetUserPhone) {
             console.log(`📊 Estado del usuario destinatario: ${userStatus}`);
             
             if (userStatus === 'online') {
-                console.log('🟢 Usuario destinatario está ONLINE - debería recibir inmediatamente');
+                // Usuario online - enviar pulse adicional
+                database.ref(`users/${targetUserId}/alertPulse`).set({
+                    type: 'friend_request',
+                    requestId: requestId,
+                    from: currentUser.phoneNumber,
+                    timestamp: Date.now()
+                });
+                console.log('🟢 Usuario online - enviado pulse adicional');
                 showInstantNotification(`✅ Solicitud enviada a ${targetUserPhone} (usuario en línea)`, 'friend-request');
             } else {
-                console.log('🔴 Usuario destinatario está OFFLINE - recibirá al conectarse');
+                console.log('🔴 Usuario offline - recibirá al conectarse');
                 showInstantNotification(`✅ Solicitud enviada a ${targetUserPhone} (recibirá al conectarse)`, 'friend-request');
             }
             
@@ -3241,15 +3342,15 @@ function setupFriendRequestsListener() {
         return;
     }
 
-    console.log('Configurando listener de solicitudes para:', currentUser.uid);
+    console.log('🔧 Configurando listener de solicitudes para:', currentUser.uid);
 
-    // Limpiar listener anterior
+    // Limpiar listeners anteriores
     if (friendRequestsListener) {
         friendRequestsListener.off();
         friendRequestsListener = null;
     }
 
-    // Configurar listener para solicitudes entrantes con error handling
+    // 1. Listener principal para solicitudes entrantes
     try {
         friendRequestsListener = database.ref(`friendRequests/${currentUser.uid}`);
         
@@ -3257,25 +3358,94 @@ function setupFriendRequestsListener() {
             const request = snapshot.val();
             const requestId = snapshot.key;
             
-            console.log('Nueva solicitud detectada en tiempo real:', request);
+            console.log('🚨 Nueva solicitud detectada en tiempo real:', request);
             
             if (request && request.status === 'pending') {
-                // Verificar que no sea una solicitud antigua (últimos 10 minutos)
-                const requestTime = request.timestamp;
-                const now = Date.now();
-                const tenMinutesAgo = now - (10 * 60 * 1000);
+                console.log('✅ Mostrando solicitud inmediatamente');
                 
-                if (requestTime > tenMinutesAgo || typeof requestTime === 'object') {
-                    console.log('✅ Mostrando solicitud válida:', request);
-                    
-                    // Mostrar notificación instantánea
-                    showInstantNotification(`📱 Nueva solicitud de ${request.fromPhone}`, 'friend-request');
-                    
-                    // Mostrar modal inmediatamente
-                    showFriendRequestModal(request, requestId);
-                } else {
-                    console.log('❌ Solicitud demasiado antigua, ignorando');
-                }
+                // Mostrar notificación instantánea
+                showInstantNotification(`📱 Nueva solicitud de ${request.fromPhone}`, 'friend-request');
+                
+                // Mostrar modal inmediatamente
+                showFriendRequestModal(request, requestId);
+            }
+        });
+
+        // 2. Listener para flag urgente de solicitudes pendientes
+        database.ref(`users/${currentUser.uid}/pendingFriendRequest`).on('value', (snapshot) => {
+            const pendingRequest = snapshot.val();
+            if (pendingRequest && pendingRequest.requestId && pendingRequest.urgent) {
+                console.log('🔥 Solicitud URGENTE detectada via flag:', pendingRequest);
+                
+                // Buscar la solicitud completa
+                database.ref(`friendRequests/${currentUser.uid}/${pendingRequest.requestId}`).once('value')
+                    .then(requestSnapshot => {
+                        if (requestSnapshot.exists()) {
+                            const request = requestSnapshot.val();
+                            if (request.status === 'pending') {
+                                showFriendRequestModal(request, pendingRequest.requestId);
+                            }
+                        }
+                    });
+            }
+        });
+
+        // 3. Listener para último friend request
+        database.ref(`users/${currentUser.uid}/lastFriendRequest`).on('value', (snapshot) => {
+            const lastRequest = snapshot.val();
+            if (lastRequest && lastRequest.requestId) {
+                console.log('🎯 Último friend request detectado:', lastRequest);
+                
+                // Buscar solicitud por ID
+                database.ref(`friendRequests/${currentUser.uid}/${lastRequest.requestId}`).once('value')
+                    .then(requestSnapshot => {
+                        if (requestSnapshot.exists()) {
+                            const request = requestSnapshot.val();
+                            if (request.status === 'pending') {
+                                showFriendRequestModal(request, lastRequest.requestId);
+                            }
+                        }
+                    });
+            }
+        });
+
+        // 4. Listener para pulsos de alerta
+        database.ref(`users/${currentUser.uid}/alertPulse`).on('value', (snapshot) => {
+            const pulse = snapshot.val();
+            if (pulse && pulse.type === 'friend_request') {
+                console.log('⚡ Pulse de solicitud de amistad recibido:', pulse);
+                showInstantNotification(`📱 Nueva solicitud de ${pulse.from}`, 'friend-request');
+                
+                // Buscar solicitud
+                database.ref(`friendRequests/${currentUser.uid}/${pulse.requestId}`).once('value')
+                    .then(requestSnapshot => {
+                        if (requestSnapshot.exists()) {
+                            const request = requestSnapshot.val();
+                            if (request.status === 'pending') {
+                                showFriendRequestModal(request, pulse.requestId);
+                            }
+                        }
+                    });
+            }
+        });
+
+        // 5. Listener global de respaldo
+        database.ref(`globalFriendRequests`).orderByChild('targetUser').equalTo(currentUser.uid).on('child_added', (snapshot) => {
+            const globalRequest = snapshot.val();
+            const requestId = snapshot.key;
+            
+            if (globalRequest && globalRequest.status === 'pending') {
+                console.log('🌍 Solicitud detectada via listener global:', globalRequest);
+                
+                database.ref(`friendRequests/${currentUser.uid}/${requestId}`).once('value')
+                    .then(requestSnapshot => {
+                        if (requestSnapshot.exists()) {
+                            const request = requestSnapshot.val();
+                            if (request.status === 'pending') {
+                                showFriendRequestModal(request, requestId);
+                            }
+                        }
+                    });
             }
         });
 
@@ -3294,20 +3464,12 @@ function setupFriendRequestsListener() {
             }
         });
 
-        // Manejar errores de conexión
-        friendRequestsListener.on('error', (error) => {
-            console.error('Error en listener de solicitudes:', error);
-            // Reintentar configurar listener después de 5 segundos
-            setTimeout(() => {
-                console.log('Reintentando configurar listener...');
-                setupFriendRequestsListener();
-            }, 5000);
-        });
-
-        console.log('✅ Listener de solicitudes configurado correctamente para:', currentUser.uid);
+        console.log('✅ Listener de solicitudes configurado con múltiples canales');
         
     } catch (error) {
         console.error('❌ Error configurando listener de solicitudes:', error);
+        // Reintentar después de 3 segundos
+        setTimeout(setupFriendRequestsListener, 3000);
     }
 }
 
