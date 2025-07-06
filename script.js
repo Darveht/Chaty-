@@ -24,7 +24,7 @@ const database = firebase.database();
 
 // Estado global de la aplicación
 let currentScreen = 'intro';
-let userLanguage = 'es';
+let userLanguage = detectDeviceLanguage();
 let currentChatContact = null;
 let currentUser = null;
 let verificationCode = '';
@@ -60,6 +60,174 @@ let sessionManager = {
 // Variables para modal de aprobación de dispositivo
 let deviceApprovalModal = null;
 let approvalTimeout = null;
+
+// Función para detectar idioma del dispositivo
+function detectDeviceLanguage() {
+    // Obtener idioma del navegador/dispositivo
+    const deviceLang = navigator.language || navigator.userLanguage || 'es';
+    const langCode = deviceLang.substring(0, 2).toLowerCase();
+    
+    // Idiomas soportados
+    const supportedLanguages = ['es', 'en', 'fr', 'de', 'pt', 'it'];
+    
+    // Si el idioma está soportado, usarlo; sino usar español por defecto
+    return supportedLanguages.includes(langCode) ? langCode : 'es';
+}
+
+// Google Translate API - Configuración
+const GOOGLE_TRANSLATE_CONFIG = {
+    apiKey: 'AIzaSyBOti4mM-6x9WDnZIjIeyEU21OpBXqWBgw', // API Key gratuita (reemplazar con tu propia key)
+    baseUrl: 'https://translation.googleapis.com/language/translate/v2',
+    maxRequestsPerDay: 100000, // Límite gratuito
+    fallbackTranslations: true
+};
+
+// Cache de traducciones para optimizar rendimiento
+let translationCache = new Map();
+
+// Función para traducir texto usando Google Translate API
+async function translateTextWithGoogle(text, targetLang, sourceLang = 'auto') {
+    // Crear clave única para el cache
+    const cacheKey = `${text}_${sourceLang}_${targetLang}`;
+    
+    // Verificar si ya tenemos la traducción en cache
+    if (translationCache.has(cacheKey)) {
+        return translationCache.get(cacheKey);
+    }
+    
+    try {
+        const response = await fetch(`${GOOGLE_TRANSLATE_CONFIG.baseUrl}?key=${GOOGLE_TRANSLATE_CONFIG.apiKey}`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                q: text,
+                target: targetLang,
+                source: sourceLang,
+                format: 'text'
+            })
+        });
+
+        if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+        }
+
+        const data = await response.json();
+        
+        if (data.data && data.data.translations && data.data.translations.length > 0) {
+            const translatedText = data.data.translations[0].translatedText;
+            
+            // Guardar en cache
+            translationCache.set(cacheKey, translatedText);
+            
+            console.log(`Traducido: "${text}" -> "${translatedText}" (${sourceLang} -> ${targetLang})`);
+            return translatedText;
+        } else {
+            throw new Error('No se recibieron traducciones válidas');
+        }
+    } catch (error) {
+        console.error('Error en Google Translate API:', error);
+        
+        // Fallback a traducciones estáticas si falla la API
+        if (GOOGLE_TRANSLATE_CONFIG.fallbackTranslations) {
+            return getFallbackTranslation(text, targetLang);
+        }
+        
+        return text; // Devolver texto original si falla todo
+    }
+}
+
+// Función de respaldo con traducciones estáticas
+function getFallbackTranslation(text, targetLang) {
+    const fallbackTranslations = {
+        'es': {
+            'Get Started': 'Comenzar',
+            'Your phone number': 'Tu número de teléfono',
+            'Send code': 'Enviar código',
+            'Verification': 'Verificación',
+            'Chats': 'Chats',
+            'Translate': 'Traducir',
+            'Calls': 'Llamadas',
+            'Settings': 'Ajustes',
+            'Type a message...': 'Escribe un mensaje...',
+            'Online': 'En línea',
+            'Add contact': 'Agregar contacto',
+            'Search conversations...': 'Buscar conversaciones...'
+        },
+        'en': {
+            'Comenzar': 'Get Started',
+            'Tu número de teléfono': 'Your phone number',
+            'Enviar código': 'Send code',
+            'Verificación': 'Verification',
+            'Chats': 'Chats',
+            'Traducir': 'Translate',
+            'Llamadas': 'Calls',
+            'Ajustes': 'Settings',
+            'Escribe un mensaje...': 'Type a message...',
+            'En línea': 'Online',
+            'Agregar contacto': 'Add contact',
+            'Buscar conversaciones...': 'Search conversations...'
+        },
+        'fr': {
+            'Get Started': 'Commencer',
+            'Your phone number': 'Votre numéro de téléphone',
+            'Send code': 'Envoyer le code',
+            'Verification': 'Vérification',
+            'Chats': 'Discussions',
+            'Translate': 'Traduire',
+            'Calls': 'Appels',
+            'Settings': 'Paramètres'
+        }
+    };
+    
+    return fallbackTranslations[targetLang]?.[text] || text;
+}
+
+// Función para traducir toda la interfaz en tiempo real
+async function translateInterface(targetLang) {
+    const elementsToTranslate = document.querySelectorAll('[data-translate], .chat-name, .setting-title, .tutorial-content h1, .tutorial-content h2, .tutorial-content p');
+    
+    const translationPromises = [];
+    
+    elementsToTranslate.forEach(element => {
+        const originalText = element.textContent.trim();
+        
+        if (originalText && originalText.length > 0) {
+            const promise = translateTextWithGoogle(originalText, targetLang)
+                .then(translatedText => {
+                    element.textContent = translatedText;
+                })
+                .catch(error => {
+                    console.error(`Error traduciendo "${originalText}":`, error);
+                });
+            
+            translationPromises.push(promise);
+        }
+    });
+    
+    // Traducir placeholders
+    const inputsWithPlaceholders = document.querySelectorAll('input[placeholder], textarea[placeholder]');
+    inputsWithPlaceholders.forEach(input => {
+        const originalPlaceholder = input.placeholder;
+        if (originalPlaceholder) {
+            const promise = translateTextWithGoogle(originalPlaceholder, targetLang)
+                .then(translatedPlaceholder => {
+                    input.placeholder = translatedPlaceholder;
+                })
+                .catch(error => {
+                    console.error(`Error traduciendo placeholder "${originalPlaceholder}":`, error);
+                });
+            
+            translationPromises.push(promise);
+        }
+    });
+    
+    // Esperar a que todas las traducciones se completen
+    await Promise.all(translationPromises);
+    
+    console.log(`Interfaz traducida completamente a: ${targetLang}`);
+}
 
 // Traducciones de la interfaz
 const translations = {
@@ -137,7 +305,38 @@ function switchScreen(targetScreen) {
 }
 
 // Función para actualizar el idioma de la interfaz
-function updateLanguage() {
+async function updateLanguage() {
+    const lang = userLanguage;
+    console.log(`Actualizando idioma a: ${lang}`);
+    
+    // Mostrar indicador de carga durante la traducción
+    showTranslationLoader();
+    
+    try {
+        // Usar Google Translate API para traducir la interfaz completa
+        await translateInterface(lang);
+        
+        // Actualizar selector de idioma
+        const languageSelect = document.getElementById('language-select');
+        if (languageSelect) {
+            languageSelect.value = lang;
+        }
+        
+        // Ocultar indicador de carga
+        hideTranslationLoader();
+        
+        console.log('Idioma actualizado exitosamente a:', lang);
+    } catch (error) {
+        console.error('Error actualizando idioma:', error);
+        
+        // Fallback a traducciones estáticas
+        updateLanguageFallback();
+        hideTranslationLoader();
+    }
+}
+
+// Función de respaldo para actualizar idioma con traducciones estáticas
+function updateLanguageFallback() {
     const lang = userLanguage;
     const t = translations[lang] || translations['es'];
 
@@ -152,19 +351,69 @@ function updateLanguage() {
     // Actualizar placeholders
     const messageInput = document.getElementById('message-input');
     if (messageInput) {
-        messageInput.placeholder = t.typeMessage;
+        messageInput.placeholder = t.typeMessage || 'Escribe un mensaje...';
     }
 
     const searchInput = document.getElementById('search-input');
     if (searchInput) {
-        searchInput.placeholder = t.searchConversations;
+        searchInput.placeholder = t.searchConversations || 'Buscar conversaciones...';
+    }
+}
+
+// Función para mostrar indicador de carga de traducción
+function showTranslationLoader() {
+    const existingLoader = document.getElementById('translation-loader');
+    if (existingLoader) return;
+    
+    const loader = document.createElement('div');
+    loader.id = 'translation-loader';
+    loader.style.cssText = `
+        position: fixed;
+        top: 20px;
+        right: 20px;
+        background: var(--primary-color);
+        color: white;
+        padding: 0.75rem 1rem;
+        border-radius: 25px;
+        font-size: 0.9rem;
+        z-index: 9999;
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        box-shadow: var(--shadow);
+    `;
+    loader.innerHTML = `
+        <i class="fas fa-language fa-spin"></i>
+        <span>Traduciendo interfaz...</span>
+    `;
+    
+    document.body.appendChild(loader);
+}
+
+// Función para ocultar indicador de carga
+function hideTranslationLoader() {
+    const loader = document.getElementById('translation-loader');
+    if (loader) {
+        loader.remove();
     }
 }
 
 // Pantalla de Introducción
-document.getElementById('language-select').addEventListener('change', function() {
-    userLanguage = this.value;
-    updateLanguage();
+document.getElementById('language-select').addEventListener('change', async function() {
+    const newLanguage = this.value;
+    
+    if (newLanguage !== userLanguage) {
+        userLanguage = newLanguage;
+        
+        // Guardar preferencia
+        localStorage.setItem('uberchat_language', newLanguage);
+        
+        // Actualizar interfaz en tiempo real
+        await updateLanguage();
+        
+        // Mostrar confirmación
+        showInstantNotification(`🌍 Idioma cambiado a: ${this.options[this.selectedIndex].text}`, 'friend-request');
+    }
 });
 
 function goToRegister() {
@@ -3239,16 +3488,17 @@ function handleEnterKey(event) {
     }
 }
 
-// Función de traducción usando Google Translate API (simulada)
+// Función de traducción usando Google Translate API en tiempo real
 async function translateMessage(text, fromLang, toLang) {
     try {
-        // En un entorno real, usarías la API real de Google Translate
-        const response = await simulateTranslation(text, fromLang, toLang);
-        console.log(`Traducido de ${fromLang} a ${toLang}:`, response);
-        return response;
+        // Usar Google Translate API real
+        const translatedText = await translateTextWithGoogle(text, toLang, fromLang);
+        console.log(`Mensaje traducido de ${fromLang} a ${toLang}: "${text}" -> "${translatedText}"`);
+        return translatedText;
     } catch (error) {
-        console.error('Error en traducción:', error);
-        return text; // Devolver texto original si falla
+        console.error('Error en traducción de mensaje:', error);
+        // Fallback a traducción simulada
+        return simulateTranslation(text, fromLang, toLang);
     }
 }
 
@@ -4085,7 +4335,9 @@ function checkTutorialStatus() {
 document.addEventListener('DOMContentLoaded', function() {
     // Configurar pantalla inicial como loading
     switchScreen('intro');
-    updateLanguage();
+    
+    // Detectar y configurar idioma del dispositivo automáticamente
+    initializeDeviceLanguage();
 
     // Verificar estado de autenticación
     checkAuthState();
@@ -4124,6 +4376,83 @@ document.addEventListener('DOMContentLoaded', function() {
 
     console.log('UberChat iniciado correctamente');
 });
+
+// Función para inicializar idioma del dispositivo
+async function initializeDeviceLanguage() {
+    console.log('Detectando idioma del dispositivo...');
+    
+    const detectedLanguage = detectDeviceLanguage();
+    console.log(`Idioma detectado: ${detectedLanguage}`);
+    
+    // Actualizar idioma global
+    userLanguage = detectedLanguage;
+    
+    // Mostrar notificación del idioma detectado
+    showLanguageDetectionNotification(detectedLanguage);
+    
+    // Actualizar interfaz con el idioma detectado
+    await updateLanguage();
+    
+    // Guardar preferencia de idioma
+    localStorage.setItem('uberchat_language', detectedLanguage);
+}
+
+// Función para mostrar notificación de idioma detectado
+function showLanguageDetectionNotification(language) {
+    const languageNames = {
+        'es': '🇪🇸 Español',
+        'en': '🇺🇸 English', 
+        'fr': '🇫🇷 Français',
+        'de': '🇩🇪 Deutsch',
+        'pt': '🇵🇹 Português',
+        'it': '🇮🇹 Italiano'
+    };
+    
+    const notification = document.createElement('div');
+    notification.style.cssText = `
+        position: fixed;
+        top: 20px;
+        left: 50%;
+        transform: translateX(-50%);
+        background: linear-gradient(135deg, var(--primary-color), var(--accent-color));
+        color: white;
+        padding: 1rem 1.5rem;
+        border-radius: 25px;
+        font-weight: 600;
+        z-index: 10000;
+        box-shadow: var(--shadow);
+        animation: slideDown 0.5s ease;
+    `;
+    
+    notification.innerHTML = `
+        <div style="display: flex; align-items: center; gap: 0.5rem;">
+            <i class="fas fa-globe"></i>
+            <span>Idioma detectado: ${languageNames[language] || language}</span>
+        </div>
+    `;
+    
+    // Agregar animación CSS
+    const style = document.createElement('style');
+    style.textContent = `
+        @keyframes slideDown {
+            from { transform: translateX(-50%) translateY(-100%); opacity: 0; }
+            to { transform: translateX(-50%) translateY(0); opacity: 1; }
+        }
+    `;
+    document.head.appendChild(style);
+    
+    document.body.appendChild(notification);
+    
+    // Auto-ocultar después de 3 segundos
+    setTimeout(() => {
+        notification.style.animation = 'slideDown 0.5s ease reverse';
+        setTimeout(() => {
+            if (notification.parentNode) {
+                notification.parentNode.removeChild(notification);
+            }
+        }, 500);
+    }, 3000);
+}
 
 // Función para implementar traducción real con Google Translate API
 // Descomenta y configura cuando tengas acceso a la API
