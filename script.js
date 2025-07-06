@@ -175,6 +175,52 @@ function goToIntro() {
     switchScreen('intro');
 }
 
+// Lista completa de países con banderas y códigos
+const countries = [
+    { name: 'España', code: '+34', flag: '🇪🇸', popular: true },
+    { name: 'Estados Unidos', code: '+1', flag: '🇺🇸', popular: true },
+    { name: 'México', code: '+52', flag: '🇲🇽', popular: true },
+    { name: 'Argentina', code: '+54', flag: '🇦🇷', popular: true },
+    { name: 'Brasil', code: '+55', flag: '🇧🇷', popular: true },
+    { name: 'Colombia', code: '+57', flag: '🇨🇴', popular: true },
+    { name: 'Chile', code: '+56', flag: '🇨🇱', popular: true },
+    { name: 'Perú', code: '+51', flag: '🇵🇪', popular: true },
+    { name: 'Francia', code: '+33', flag: '🇫🇷' },
+    { name: 'Alemania', code: '+49', flag: '🇩🇪' },
+    { name: 'Italia', code: '+39', flag: '🇮🇹' },
+    { name: 'Reino Unido', code: '+44', flag: '🇬🇧' },
+    { name: 'Canadá', code: '+1', flag: '🇨🇦' },
+    { name: 'Australia', code: '+61', flag: '🇦🇺' },
+    { name: 'Japón', code: '+81', flag: '🇯🇵' },
+    { name: 'China', code: '+86', flag: '🇨🇳' },
+    { name: 'India', code: '+91', flag: '🇮🇳' },
+    { name: 'Rusia', code: '+7', flag: '🇷🇺' },
+    { name: 'Corea del Sur', code: '+82', flag: '🇰🇷' },
+    { name: 'Holanda', code: '+31', flag: '🇳🇱' },
+    { name: 'Bélgica', code: '+32', flag: '🇧🇪' },
+    { name: 'Suiza', code: '+41', flag: '🇨🇭' },
+    { name: 'Austria', code: '+43', flag: '🇦🇹' },
+    { name: 'Suecia', code: '+46', flag: '🇸🇪' },
+    { name: 'Noruega', code: '+47', flag: '🇳🇴' },
+    { name: 'Dinamarca', code: '+45', flag: '🇩🇰' },
+    { name: 'Finlandia', code: '+358', flag: '🇫🇮' },
+    { name: 'Portugal', code: '+351', flag: '🇵🇹' },
+    { name: 'Grecia', code: '+30', flag: '🇬🇷' },
+    { name: 'Turquía', code: '+90', flag: '🇹🇷' },
+    { name: 'Israel', code: '+972', flag: '🇮🇱' },
+    { name: 'Emiratos Árabes Unidos', code: '+971', flag: '🇦🇪' },
+    { name: 'Arabia Saudí', code: '+966', flag: '🇸🇦' },
+    { name: 'Egipto', code: '+20', flag: '🇪🇬' },
+    { name: 'Sudáfrica', code: '+27', flag: '🇿🇦' },
+    { name: 'Marruecos', code: '+212', flag: '🇲🇦' },
+    { name: 'Nigeria', code: '+234', flag: '🇳🇬' },
+    { name: 'Kenia', code: '+254', flag: '🇰🇪' },
+    { name: 'Ghana', code: '+233', flag: '🇬🇭' },
+    { name: 'Tanzania', code: '+255', flag: '🇹🇿' }
+];
+
+let selectedCountry = countries[0]; // España por defecto
+
 // Pantalla de Registro
 const phoneInput = document.getElementById('phone-input');
 const sendCodeBtn = document.getElementById('send-code-btn');
@@ -185,8 +231,164 @@ phoneInput.addEventListener('input', function() {
     sendCodeBtn.disabled = !isValid;
 });
 
+// Funciones para el modal de países
+function openCountryModal() {
+    const modal = document.getElementById('country-modal');
+    const btn = document.getElementById('country-selector-btn');
+    
+    // Llenar la lista de países si no está llena
+    loadCountriesList();
+    
+    // Mostrar modal con animación
+    modal.classList.add('show');
+    btn.classList.add('active');
+    
+    // Enfocar en la búsqueda
+    setTimeout(() => {
+        document.getElementById('country-search').focus();
+    }, 300);
+}
+
+function closeCountryModal() {
+    const modal = document.getElementById('country-modal');
+    const btn = document.getElementById('country-selector-btn');
+    
+    modal.classList.remove('show');
+    btn.classList.remove('active');
+    
+    // Limpiar búsqueda
+    document.getElementById('country-search').value = '';
+    filterCountries();
+}
+
+function loadCountriesList() {
+    const countriesList = document.getElementById('countries-list');
+    
+    // Limpiar lista actual
+    countriesList.innerHTML = '';
+    
+    // Separar países populares
+    const popularCountries = countries.filter(country => country.popular);
+    const otherCountries = countries.filter(country => !country.popular);
+    
+    // Agregar sección de países populares
+    if (popularCountries.length > 0) {
+        const popularHeader = document.createElement('div');
+        popularHeader.className = 'countries-section-header';
+        popularHeader.innerHTML = `
+            <div style="padding: 0.75rem 2rem; background: var(--surface); font-weight: 600; font-size: 0.8rem; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.5px;">
+                Países populares
+            </div>
+        `;
+        countriesList.appendChild(popularHeader);
+        
+        popularCountries.forEach(country => {
+            countriesList.appendChild(createCountryItem(country));
+        });
+        
+        // Agregar separador
+        const separator = document.createElement('div');
+        separator.style.cssText = 'height: 8px; background: var(--surface); margin: 0.5rem 0;';
+        countriesList.appendChild(separator);
+        
+        const otherHeader = document.createElement('div');
+        otherHeader.className = 'countries-section-header';
+        otherHeader.innerHTML = `
+            <div style="padding: 0.75rem 2rem; background: var(--surface); font-weight: 600; font-size: 0.8rem; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.5px;">
+                Todos los países
+            </div>
+        `;
+        countriesList.appendChild(otherHeader);
+    }
+    
+    // Agregar todos los países ordenados alfabéticamente
+    const allCountriesSorted = [...countries].sort((a, b) => a.name.localeCompare(b.name));
+    allCountriesSorted.forEach(country => {
+        countriesList.appendChild(createCountryItem(country));
+    });
+}
+
+function createCountryItem(country) {
+    const item = document.createElement('div');
+    item.className = 'country-item';
+    item.dataset.countryName = country.name.toLowerCase();
+    item.dataset.countryCode = country.code;
+    
+    if (selectedCountry.code === country.code && selectedCountry.name === country.name) {
+        item.classList.add('selected');
+    }
+    
+    item.innerHTML = `
+        <div class="country-item-flag">${country.flag}</div>
+        <div class="country-item-info">
+            <div class="country-item-name">${country.name}</div>
+            <div class="country-item-code">${country.code}</div>
+        </div>
+    `;
+    
+    item.onclick = () => selectCountry(country);
+    
+    return item;
+}
+
+function selectCountry(country) {
+    selectedCountry = country;
+    
+    // Actualizar UI del selector
+    const flagElement = document.querySelector('.country-flag');
+    const codeElement = document.querySelector('.country-code');
+    
+    flagElement.textContent = country.flag;
+    codeElement.textContent = country.code;
+    
+    // Cerrar modal
+    closeCountryModal();
+    
+    // Enfocar en el input de teléfono
+    setTimeout(() => {
+        document.getElementById('phone-input').focus();
+    }, 300);
+    
+    console.log('País seleccionado:', country);
+}
+
+function filterCountries() {
+    const searchTerm = document.getElementById('country-search').value.toLowerCase();
+    const countryItems = document.querySelectorAll('.country-item');
+    let hasResults = false;
+    
+    countryItems.forEach(item => {
+        const countryName = item.dataset.countryName;
+        const countryCode = item.dataset.countryCode.toLowerCase();
+        
+        if (countryName.includes(searchTerm) || countryCode.includes(searchTerm)) {
+            item.classList.remove('hidden');
+            hasResults = true;
+        } else {
+            item.classList.add('hidden');
+        }
+    });
+    
+    // Mostrar mensaje de no resultados
+    const existingNoResults = document.querySelector('.no-results');
+    if (existingNoResults) {
+        existingNoResults.remove();
+    }
+    
+    if (!hasResults && searchTerm.length > 0) {
+        const noResults = document.createElement('div');
+        noResults.className = 'no-results';
+        noResults.innerHTML = `
+            <i class="fas fa-search"></i>
+            <h4>No se encontraron países</h4>
+            <p>Intenta con otro término de búsqueda</p>
+        `;
+        document.getElementById('countries-list').appendChild(noResults);
+    }
+}
+
 function sendVerificationCode() {
-    const countryCode = document.getElementById('country-select').value;
+    const countryCode = selectedCountry.code;
     const phoneNumber = document.getElementById('phone-input').value;
 
     // Limpiar el número de teléfono (remover espacios y caracteres no numéricos)

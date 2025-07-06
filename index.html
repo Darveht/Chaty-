@@ -50,18 +50,42 @@
                 <p>Te enviaremos un código de verificación</p>
             </div>
             <div class="phone-input-container">
-                <div class="country-selector">
-                    <select id="country-select">
-                        <option value="+34">España (+34)</option>
-                        <option value="+1">Estados Unidos (+1)</option>
-                        <option value="+52">México (+52)</option>
-                        <option value="+54">Argentina (+54)</option>
-                        <option value="+55">Brasil (+55)</option>
-                        <option value="+33">Francia (+33)</option>
-                        <option value="+49">Alemania (+49)</option>
-                    </select>
+                <div class="country-phone-wrapper">
+                    <button class="country-selector-btn" id="country-selector-btn" onclick="openCountryModal()">
+                        <div class="selected-country">
+                            <span class="country-flag">🇪🇸</span>
+                            <span class="country-code">+34</span>
+                        </div>
+                        <i class="fas fa-chevron-down"></i>
+                    </button>
+                    <div class="phone-input-wrapper">
+                        <input type="tel" id="phone-input" placeholder="Comienza con tu número de teléfono" maxlength="15">
+                    </div>
                 </div>
-                <input type="tel" id="phone-input" placeholder="Número de teléfono" maxlength="15">
+            </div>
+
+            <!-- Modal de selección de países -->
+            <div id="country-modal" class="country-modal">
+                <div class="country-modal-content">
+                    <div class="country-modal-header">
+                        <button class="modal-close-btn" onclick="closeCountryModal()">
+                            <i class="fas fa-times"></i>
+                        </button>
+                        <h3>Selecciona tu país</h3>
+                    </div>
+                    
+                    <div class="country-search-container">
+                        <div class="search-input-wrapper">
+                            <i class="fas fa-search"></i>
+                            <input type="text" id="country-search" placeholder="Buscar país..." oninput="filterCountries()">
+                        </div>
+                    </div>
+
+                    <div class="countries-list" id="countries-list">
+                        <!-- Los países se cargarán dinámicamente -->
+                    </div>
+                </div>
+                <div class="modal-backdrop" onclick="closeCountryModal()"></div>
             </div>
             <div id="recaptcha-container"></div>
             <button class="primary-btn" onclick="sendVerificationCode()" id="send-code-btn" disabled>

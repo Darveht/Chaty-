@@ -214,6 +214,7 @@ body {
     max-width: 400px;
     margin: 0 auto;
     width: 100%;
+    position: relative;
 }
 
 .register-header {
@@ -236,54 +237,317 @@ body {
     margin-bottom: 2rem;
 }
 
-.country-selector {
-    margin-bottom: 1rem;
+.country-phone-wrapper {
+    display: flex;
+    gap: 0.75rem;
+    align-items: stretch;
 }
 
-.country-selector select {
+.country-selector-btn {
+    background: var(--background);
+    border: 2px solid var(--border-color);
+    border-radius: var(--border-radius);
+    padding: 1rem;
+    cursor: pointer;
+    transition: var(--transition);
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    min-width: 120px;
+    box-shadow: var(--shadow);
+}
+
+.country-selector-btn:hover {
+    border-color: var(--text-secondary);
+    transform: translateY(-1px);
+    box-shadow: var(--shadow-hover);
+}
+
+.country-selector-btn:active {
+    transform: translateY(0);
+    box-shadow: var(--shadow);
+}
+
+.selected-country {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    flex: 1;
+}
+
+.country-flag {
+    font-size: 1.2rem;
+}
+
+.country-code {
+    font-weight: 600;
+    color: var(--text-primary);
+    font-size: 1rem;
+}
+
+.country-selector-btn i {
+    color: var(--text-secondary);
+    font-size: 0.8rem;
+    transition: transform 0.3s ease;
+}
+
+.country-selector-btn.active i {
+    transform: rotate(180deg);
+}
+
+.phone-input-wrapper {
+    flex: 1;
+}
+
+#phone-input {
     width: 100%;
     padding: 1rem 1.5rem;
     border: 2px solid var(--border-color);
     border-radius: var(--border-radius);
-    background: var(--background);
-    font-size: 1rem;
-    cursor: pointer;
-    transition: var(--transition);
-    appearance: none;
-    background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3e%3cpath stroke='%236b7280' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='m6 8 4 4 4-4'/%3e%3c/svg%3e");
-    background-position: right 0.75rem center;
-    background-repeat: no-repeat;
-    background-size: 1.5em 1.5em;
-    padding-right: 3rem;
-    box-shadow: var(--shadow);
+    font-size: 1.1rem;
     font-weight: 500;
+    transition: var(--transition);
+    box-shadow: var(--shadow);
+    height: 100%;
 }
 
-.country-selector select:focus {
+#phone-input:focus {
     outline: none;
     border-color: var(--primary-color);
     box-shadow: 0 0 0 3px rgba(0, 0, 0, 0.1);
     transform: translateY(-2px);
 }
 
-.country-selector select:hover {
+#phone-input:hover {
     border-color: var(--text-secondary);
     transform: translateY(-1px);
 }
 
-#phone-input {
+/* Modal de países estilo Uber */
+.country-modal {
+    position: fixed;
+    top: 0;
+    left: 0;
     width: 100%;
-    padding: 1rem;
+    height: 100vh;
+    z-index: 10000;
+    display: none;
+    opacity: 0;
+    transition: opacity 0.3s ease;
+}
+
+.country-modal.show {
+    display: flex;
+    opacity: 1;
+}
+
+.modal-backdrop {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.5);
+    backdrop-filter: blur(5px);
+}
+
+.country-modal-content {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    background: var(--background);
+    border-radius: 20px 20px 0 0;
+    max-height: 70vh;
+    min-height: 50vh;
+    display: flex;
+    flex-direction: column;
+    transform: translateY(100%);
+    transition: transform 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+    box-shadow: 0 -10px 40px rgba(0, 0, 0, 0.3);
+}
+
+.country-modal.show .country-modal-content {
+    transform: translateY(0);
+}
+
+.country-modal-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 1.5rem 2rem 1rem;
+    border-bottom: 1px solid var(--border-color);
+    position: relative;
+}
+
+.country-modal-header::before {
+    content: '';
+    position: absolute;
+    top: 8px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 40px;
+    height: 4px;
+    background: var(--border-color);
+    border-radius: 2px;
+}
+
+.country-modal-header h3 {
+    font-size: 1.3rem;
+    font-weight: 700;
+    margin: 0;
+    color: var(--text-primary);
+    flex: 1;
+    text-align: center;
+}
+
+.modal-close-btn {
+    background: var(--surface);
+    border: none;
+    color: var(--text-secondary);
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: var(--transition);
+    font-size: 0.9rem;
+}
+
+.modal-close-btn:hover {
+    background: var(--border-color);
+    color: var(--text-primary);
+}
+
+.country-search-container {
+    padding: 1rem 2rem;
+    border-bottom: 1px solid var(--border-color);
+}
+
+.search-input-wrapper {
+    position: relative;
+    display: flex;
+    align-items: center;
+}
+
+.search-input-wrapper i {
+    position: absolute;
+    left: 1rem;
+    color: var(--text-secondary);
+    font-size: 1rem;
+    z-index: 1;
+}
+
+#country-search {
+    width: 100%;
+    padding: 1rem 1rem 1rem 3rem;
     border: 2px solid var(--border-color);
-    border-radius: var(--border-radius);
-    font-size: 1.1rem;
-    font-weight: 500;
+    border-radius: 25px;
+    background: var(--surface);
+    font-size: 1rem;
     transition: var(--transition);
 }
 
-#phone-input:focus {
+#country-search:focus {
     outline: none;
     border-color: var(--primary-color);
+    background: var(--background);
+    box-shadow: 0 0 0 3px rgba(0, 0, 0, 0.1);
+}
+
+.countries-list {
+    flex: 1;
+    overflow-y: auto;
+    padding: 0.5rem 0;
+}
+
+.country-item {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    padding: 1rem 2rem;
+    cursor: pointer;
+    transition: var(--transition);
+    border-bottom: 1px solid rgba(225, 232, 237, 0.3);
+}
+
+.country-item:last-child {
+    border-bottom: none;
+}
+
+.country-item:hover {
+    background: var(--surface);
+    transform: translateX(5px);
+}
+
+.country-item:active {
+    background: rgba(0, 0, 0, 0.05);
+    transform: translateX(0);
+}
+
+.country-item-flag {
+    font-size: 1.5rem;
+    width: 32px;
+    text-align: center;
+}
+
+.country-item-info {
+    flex: 1;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.country-item-name {
+    font-weight: 600;
+    color: var(--text-primary);
+    font-size: 1rem;
+}
+
+.country-item-code {
+    color: var(--text-secondary);
+    font-weight: 500;
+    font-size: 0.95rem;
+}
+
+.country-item.selected {
+    background: rgba(0, 168, 84, 0.1);
+    border-left: 4px solid var(--accent-color);
+}
+
+.country-item.selected .country-item-name {
+    color: var(--accent-color);
+    font-weight: 700;
+}
+
+/* Efecto de búsqueda */
+.country-item.hidden {
+    display: none;
+}
+
+.no-results {
+    text-align: center;
+    padding: 3rem 2rem;
+    color: var(--text-secondary);
+}
+
+.no-results i {
+    font-size: 2rem;
+    margin-bottom: 1rem;
+    opacity: 0.5;
+}
+
+.no-results h4 {
+    margin-bottom: 0.5rem;
+    font-size: 1.1rem;
+    color: var(--text-primary);
+}
+
+.no-results p {
+    margin: 0;
+    font-size: 0.9rem;
 }
 
 /* Pantalla de Verificación */
@@ -3950,6 +4214,33 @@ This CSS snippet adds styles for image upload progress indication.
     .modal-content {
         width: 95%;
         margin: 1rem;
+    }
+
+    .country-phone-wrapper {
+        flex-direction: column;
+        gap: 1rem;
+    }
+
+    .country-selector-btn {
+        min-width: auto;
+        justify-content: space-between;
+    }
+
+    .country-modal-content {
+        max-height: 80vh;
+        min-height: 60vh;
+    }
+
+    .country-modal-header {
+        padding: 1.25rem 1.5rem 0.75rem;
+    }
+
+    .country-search-container {
+        padding: 0.75rem 1.5rem;
+    }
+
+    .country-item {
+        padding: 1rem 1.5rem;
     }
 }
 
