@@ -10,11 +10,11 @@ const firebaseConfig = {
     measurementId: "G-P29ME5Z3S1"
 };
 
-// Cloudinary Configuration
-const CLOUDINARY_CONFIG = {
-    cloudName: 'dqzkwfs7d',
-    apiKey: '238548142884869',
-    uploadPreset: 'ml_default'  // Usar preset por defecto
+// Dropbox Configuration
+const DROPBOX_CONFIG = {
+    appKey: 'v5dfnl6faz90grp',
+    appSecret: 's4xnqyfad3jl9y9',
+    accessToken: null // Se obtendrá dinámicamente
 };
 
 // Initialize Firebase
@@ -1350,8 +1350,8 @@ function handleAvatarChange(event) {
         preview.style.opacity = '0.5';
         profileAvatar.style.opacity = '0.5';
         
-        // Subir a Cloudinary
-        uploadToCloudinary(file, 'image')
+        // Subir a Dropbox
+        uploadToDropbox(file, 'image')
             .then(imageUrl => {
                 preview.src = imageUrl;
                 profileAvatar.src = imageUrl;
@@ -1375,39 +1375,136 @@ function handleAvatarChange(event) {
     }
 }
 
-// Función para subir archivos a Cloudinary
-async function uploadToCloudinary(file, resourceType = 'image') {
-    console.log('Iniciando subida a Cloudinary:', file.name, file.size);
-    
-    // Verificar tamaño del archivo (máximo 10MB)
-    if (file.size > 10 * 1024 * 1024) {
-        throw new Error('El archivo es demasiado grande. Máximo 10MB.');
+// Función para obtener token de acceso de Dropbox
+async function getDropboxAccessToken() {
+    if (DROPBOX_CONFIG.accessToken) {
+        return DROPBOX_CONFIG.accessToken;
     }
     
-    const formData = new FormData();
-    formData.append('file', file);
-    formData.append('upload_preset', CLOUDINARY_CONFIG.uploadPreset);
+    // Usar OAuth 2.0 PKCE flow para obtener token
+    const codeVerifier = generateCodeVerifier();
+    const codeChallenge = await generateCodeChallenge(codeVerifier);
+    
+    // Guardar code_verifier para uso posterior
+    localStorage.setItem('dropbox_code_verifier', codeVerifier);
+    
+    const authUrl = `https://www.dropbox.com/oauth2/authorize?` +
+        `client_id=${DROPBOX_CONFIG.appKey}&` +
+        `response_type=code&` +
+        `code_challenge=${codeChallenge}&` +
+        `code_challenge_method=S256&` +
+        `token_access_type=offline`;
+    
+    // En un entorno real, redirigirías al usuario. Para el demo, usaremos token temporal
+    console.log('Para producción, redirigir a:', authUrl);
+    
+    // Simular token para desarrollo (en producción usar OAuth real)
+    DROPBOX_CONFIG.accessToken = 'sl.B0abcdefghijklmnopqrstuvwxyz1234567890';
+    return DROPBOX_CONFIG.accessToken;
+}
+
+// Generar code verifier para PKCE
+function generateCodeVerifier() {
+    const array = new Uint8Array(32);
+    crypto.getRandomValues(array);
+    return btoa(String.fromCharCode.apply(null, array))
+        .replace(/\+/g, '-')
+        .replace(/\//g, '_')
+        .replace(/=/g, '');
+}
+
+// Generar code challenge para PKCE
+async function generateCodeChallenge(verifier) {
+    const encoder = new TextEncoder();
+    const data = encoder.encode(verifier);
+    const digest = await crypto.subtle.digest('SHA-256', data);
+    return btoa(String.fromCharCode.apply(null, new Uint8Array(digest)))
+        .replace(/\+/g, '-')
+        .replace(/\//g, '_')
+        .replace(/=/g, '');
+}
+
+// Función para subir archivos a Dropbox
+async function uploadToDropbox(file, resourceType = 'image') {
+    console.log('Iniciando subida a Dropbox:', file.name, file.size);
+    
+    // Verificar tamaño del archivo (máximo 150MB para Dropbox)
+    if (file.size > 150 * 1024 * 1024) {
+        throw new Error('El archivo es demasiado grande. Máximo 150MB.');
+    }
     
     try {
-        const response = await fetch(`https://api.cloudinary.com/v1_1/${CLOUDINARY_CONFIG.cloudName}/${resourceType}/upload`, {
+        // Obtener token de acceso
+        const accessToken = await getDropboxAccessToken();
+        
+        // Generar nombre único para el archivo
+        const timestamp = Date.now();
+        const extension = file.name.split('.').pop();
+        const fileName = `uberchat/${currentUser.uid}/${timestamp}_${file.name}`;
+        
+        console.log('Subiendo archivo a Dropbox:', fileName);
+        
+        // Subir archivo a Dropbox
+        const uploadResponse = await fetch('https://content.dropboxapi.com/2/files/upload', {
             method: 'POST',
-            body: formData
+            headers: {
+                'Authorization': `Bearer ${accessToken}`,
+                'Content-Type': 'application/octet-stream',
+                'Dropbox-API-Arg': JSON.stringify({
+                    path: `/${fileName}`,
+                    mode: 'add',
+                    autorename: true,
+                    mute: false
+                })
+            },
+            body: file
         });
         
-        console.log('Respuesta de Cloudinary:', response.status);
-        
-        if (!response.ok) {
-            const errorText = await response.text();
-            console.error('Error respuesta Cloudinary:', errorText);
-            throw new Error(`Error HTTP ${response.status}: ${errorText}`);
+        if (!uploadResponse.ok) {
+            const errorText = await uploadResponse.text();
+            console.error('Error respuesta Dropbox upload:', errorText);
+            throw new Error(`Error HTTP ${uploadResponse.status}: ${errorText}`);
         }
         
-        const data = await response.json();
-        console.log('Imagen subida exitosamente:', data.secure_url);
-        return data.secure_url;
+        const uploadData = await uploadResponse.json();
+        console.log('Archivo subido a Dropbox:', uploadData);
+        
+        // Crear enlace compartido público
+        const shareResponse = await fetch('https://api.dropboxapi.com/2/sharing/create_shared_link_with_settings', {
+            method: 'POST',
+            headers: {
+                'Authorization': `Bearer ${accessToken}`,
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                path: uploadData.path_lower,
+                settings: {
+                    audience: 'public',
+                    access: 'viewer',
+                    requested_visibility: 'public',
+                    allow_download: true
+                }
+            })
+        });
+        
+        if (!shareResponse.ok) {
+            const errorText = await shareResponse.text();
+            console.error('Error creando enlace compartido:', errorText);
+            throw new Error(`Error creando enlace público: ${shareResponse.status}`);
+        }
+        
+        const shareData = await shareResponse.json();
+        console.log('Enlace compartido creado:', shareData);
+        
+        // Convertir URL de Dropbox a URL directa de imagen
+        const directUrl = shareData.url.replace('?dl=0', '?raw=1');
+        
+        console.log('Imagen subida exitosamente a Dropbox:', directUrl);
+        return directUrl;
+        
     } catch (error) {
-        console.error('Error detallado subiendo a Cloudinary:', error);
-        throw new Error(`Error subiendo imagen: ${error.message}`);
+        console.error('Error detallado subiendo a Dropbox:', error);
+        throw new Error(`Error subiendo imagen a Dropbox: ${error.message}`);
     }
 }
 
@@ -2436,8 +2533,8 @@ function sendImageMessage(file) {
         <div class="upload-progress">Subiendo imagen...</div>
     `;
 
-    // Subir imagen a Cloudinary
-    uploadToCloudinary(file, 'image')
+    // Subir imagen a Dropbox
+    uploadToDropbox(file, 'image')
         .then(imageUrl => {
             console.log('Imagen subida, URL:', imageUrl);
             
