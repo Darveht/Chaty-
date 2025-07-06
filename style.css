@@ -4574,6 +4574,72 @@ This CSS snippet adds styles for image upload progress indication.
     }
 }
 
+/* Modal de Autorización de Dropbox */
+.dropbox-auth-modal {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100vh;
+    background: rgba(0, 0, 0, 0.8);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 10000;
+    animation: fadeIn 0.3s ease-out;
+}
+
+.dropbox-auth-content {
+    background: var(--background);
+    border-radius: 20px;
+    padding: 2rem;
+    max-width: 400px;
+    width: 90%;
+    text-align: center;
+    box-shadow: var(--shadow-large);
+    animation: slideUp 0.3s ease-out;
+}
+
+.auth-header {
+    margin-bottom: 2rem;
+}
+
+.auth-icon {
+    margin-bottom: 1rem;
+}
+
+.auth-icon i {
+    font-size: 3rem;
+    color: #0061ff;
+}
+
+.auth-header h2 {
+    font-size: 1.5rem;
+    font-weight: 700;
+    margin-bottom: 0.5rem;
+    color: var(--text-primary);
+}
+
+.auth-header p {
+    color: var(--text-secondary);
+    font-size: 1rem;
+}
+
+.auth-actions {
+    display: flex;
+    gap: 1rem;
+    justify-content: center;
+}
+
+.auth-actions .primary-btn {
+    background: #0061ff;
+    color: white;
+}
+
+.auth-actions .primary-btn:hover {
+    background: #0051d8;
+}
+
 /* Responsive */
 @media (max-width: 768px) {
     .intro-container, .register-container, .verification-container {

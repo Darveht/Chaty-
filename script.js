@@ -1377,30 +1377,52 @@ function handleAvatarChange(event) {
 
 // Función para obtener token de acceso de Dropbox
 async function getDropboxAccessToken() {
-    if (DROPBOX_CONFIG.accessToken) {
+    // Verificar si ya tenemos un token guardado
+    const savedToken = localStorage.getItem('dropbox_access_token');
+    if (savedToken && DROPBOX_CONFIG.accessToken) {
         return DROPBOX_CONFIG.accessToken;
     }
     
-    // Usar OAuth 2.0 PKCE flow para obtener token
-    const codeVerifier = generateCodeVerifier();
-    const codeChallenge = await generateCodeChallenge(codeVerifier);
-    
-    // Guardar code_verifier para uso posterior
-    localStorage.setItem('dropbox_code_verifier', codeVerifier);
-    
-    const authUrl = `https://www.dropbox.com/oauth2/authorize?` +
-        `client_id=${DROPBOX_CONFIG.appKey}&` +
-        `response_type=code&` +
-        `code_challenge=${codeChallenge}&` +
-        `code_challenge_method=S256&` +
-        `token_access_type=offline`;
-    
-    // En un entorno real, redirigirías al usuario. Para el demo, usaremos token temporal
-    console.log('Para producción, redirigir a:', authUrl);
-    
-    // Simular token para desarrollo (en producción usar OAuth real)
-    DROPBOX_CONFIG.accessToken = 'sl.B0abcdefghijklmnopqrstuvwxyz1234567890';
-    return DROPBOX_CONFIG.accessToken;
+    try {
+        // Usar OAuth 2.0 PKCE flow para obtener token
+        const codeVerifier = generateCodeVerifier();
+        const codeChallenge = await generateCodeChallenge(codeVerifier);
+        
+        // Guardar code_verifier para uso posterior
+        localStorage.setItem('dropbox_code_verifier', codeVerifier);
+        
+        const redirectUri = window.location.origin + window.location.pathname;
+        const authUrl = `https://www.dropbox.com/oauth2/authorize?` +
+            `client_id=${DROPBOX_CONFIG.appKey}&` +
+            `response_type=code&` +
+            `code_challenge=${codeChallenge}&` +
+            `code_challenge_method=S256&` +
+            `redirect_uri=${encodeURIComponent(redirectUri)}&` +
+            `token_access_type=offline`;
+        
+        // Verificar si tenemos un código de autorización en la URL
+        const urlParams = new URLSearchParams(window.location.search);
+        const authCode = urlParams.get('code');
+        
+        if (authCode) {
+            // Intercambiar código por token
+            const token = await exchangeCodeForToken(authCode, codeVerifier, redirectUri);
+            DROPBOX_CONFIG.accessToken = token;
+            localStorage.setItem('dropbox_access_token', token);
+            
+            // Limpiar URL
+            window.history.replaceState({}, document.title, window.location.pathname);
+            
+            return token;
+        } else {
+            // Redirigir a Dropbox para autorización
+            showDropboxAuthModal(authUrl);
+            throw new Error('Autorización de Dropbox requerida');
+        }
+    } catch (error) {
+        console.error('Error obteniendo token de Dropbox:', error);
+        throw new Error('No se pudo obtener autorización de Dropbox');
+    }
 }
 
 // Generar code verifier para PKCE
@@ -1424,6 +1446,77 @@ async function generateCodeChallenge(verifier) {
         .replace(/=/g, '');
 }
 
+// Intercambiar código de autorización por token de acceso
+async function exchangeCodeForToken(authCode, codeVerifier, redirectUri) {
+    try {
+        const response = await fetch('https://api.dropboxapi.com/oauth2/token', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/x-www-form-urlencoded',
+            },
+            body: new URLSearchParams({
+                code: authCode,
+                grant_type: 'authorization_code',
+                client_id: DROPBOX_CONFIG.appKey,
+                code_verifier: codeVerifier,
+                redirect_uri: redirectUri
+            })
+        });
+
+        if (!response.ok) {
+            const errorText = await response.text();
+            throw new Error(`Error HTTP ${response.status}: ${errorText}`);
+        }
+
+        const data = await response.json();
+        return data.access_token;
+    } catch (error) {
+        console.error('Error intercambiando código por token:', error);
+        throw error;
+    }
+}
+
+// Mostrar modal de autorización de Dropbox
+function showDropboxAuthModal(authUrl) {
+    const modal = document.createElement('div');
+    modal.className = 'dropbox-auth-modal';
+    modal.innerHTML = `
+        <div class="dropbox-auth-content">
+            <div class="auth-header">
+                <div class="auth-icon">
+                    <i class="fab fa-dropbox"></i>
+                </div>
+                <h2>Autorización de Dropbox Requerida</h2>
+                <p>Para subir imágenes, necesitas autorizar el acceso a Dropbox</p>
+            </div>
+            <div class="auth-actions">
+                <button class="secondary-btn" onclick="closeDropboxAuthModal()">
+                    <i class="fas fa-times"></i>
+                    Cancelar
+                </button>
+                <button class="primary-btn" onclick="authorizeDropbox('${authUrl}')">
+                    <i class="fab fa-dropbox"></i>
+                    Autorizar Dropbox
+                </button>
+            </div>
+        </div>
+    `;
+    
+    document.body.appendChild(modal);
+    window.currentDropboxAuthModal = modal;
+}
+
+function closeDropboxAuthModal() {
+    if (window.currentDropboxAuthModal) {
+        document.body.removeChild(window.currentDropboxAuthModal);
+        window.currentDropboxAuthModal = null;
+    }
+}
+
+function authorizeDropbox(authUrl) {
+    window.location.href = authUrl;
+}
+
 // Función para subir archivos a Dropbox
 async function uploadToDropbox(file, resourceType = 'image') {
     console.log('Iniciando subida a Dropbox:', file.name, file.size);
@@ -1434,8 +1527,14 @@ async function uploadToDropbox(file, resourceType = 'image') {
     }
     
     try {
-        // Obtener token de acceso
-        const accessToken = await getDropboxAccessToken();
+        // Obtener token de acceso con reintento
+        let accessToken;
+        try {
+            accessToken = await getDropboxAccessToken();
+        } catch (authError) {
+            console.error('Error de autorización:', authError);
+            throw new Error('Autorización de Dropbox requerida. Por favor, autoriza la aplicación.');
+        }
         
         // Generar nombre único para el archivo
         const timestamp = Date.now();
@@ -1463,6 +1562,14 @@ async function uploadToDropbox(file, resourceType = 'image') {
         if (!uploadResponse.ok) {
             const errorText = await uploadResponse.text();
             console.error('Error respuesta Dropbox upload:', errorText);
+            
+            // Si el token es inválido, limpiar y solicitar nueva autorización
+            if (uploadResponse.status === 401) {
+                localStorage.removeItem('dropbox_access_token');
+                DROPBOX_CONFIG.accessToken = null;
+                throw new Error('Token de Dropbox expirado. Por favor, autoriza nuevamente la aplicación.');
+            }
+            
             throw new Error(`Error HTTP ${uploadResponse.status}: ${errorText}`);
         }
         
@@ -1490,6 +1597,22 @@ async function uploadToDropbox(file, resourceType = 'image') {
         if (!shareResponse.ok) {
             const errorText = await shareResponse.text();
             console.error('Error creando enlace compartido:', errorText);
+            
+            // Si falla el enlace compartido, usar enlace temporal
+            if (shareResponse.status === 409) {
+                // El enlace ya existe, intentar obtenerlo
+                try {
+                    const existingLinks = await getExistingSharedLinks(accessToken, uploadData.path_lower);
+                    if (existingLinks && existingLinks.length > 0) {
+                        const directUrl = existingLinks[0].url.replace('?dl=0', '?raw=1');
+                        console.log('Usando enlace compartido existente:', directUrl);
+                        return directUrl;
+                    }
+                } catch (linkError) {
+                    console.error('Error obteniendo enlaces existentes:', linkError);
+                }
+            }
+            
             throw new Error(`Error creando enlace público: ${shareResponse.status}`);
         }
         
@@ -1504,7 +1627,45 @@ async function uploadToDropbox(file, resourceType = 'image') {
         
     } catch (error) {
         console.error('Error detallado subiendo a Dropbox:', error);
+        
+        // Mensajes de error más específicos
+        if (error.message.includes('401')) {
+            throw new Error('Token de Dropbox inválido o expirado. Por favor, autoriza la aplicación nuevamente.');
+        } else if (error.message.includes('403')) {
+            throw new Error('Permisos insuficientes en Dropbox. Verifica la configuración de la aplicación.');
+        } else if (error.message.includes('429')) {
+            throw new Error('Límite de velocidad de Dropbox alcanzado. Intenta de nuevo en unos minutos.');
+        } else if (error.message.includes('507')) {
+            throw new Error('Almacenamiento de Dropbox lleno. Libera espacio e intenta de nuevo.');
+        }
+        
         throw new Error(`Error subiendo imagen a Dropbox: ${error.message}`);
+    }
+}
+
+// Función para obtener enlaces compartidos existentes
+async function getExistingSharedLinks(accessToken, path) {
+    try {
+        const response = await fetch('https://api.dropboxapi.com/2/sharing/list_shared_links', {
+            method: 'POST',
+            headers: {
+                'Authorization': `Bearer ${accessToken}`,
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                path: path,
+                direct_only: true
+            })
+        });
+        
+        if (response.ok) {
+            const data = await response.json();
+            return data.links;
+        }
+        return null;
+    } catch (error) {
+        console.error('Error obteniendo enlaces existentes:', error);
+        return null;
     }
 }
 
