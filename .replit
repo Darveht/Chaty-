@@ -4,7 +4,7 @@ modules = ["nodejs-20", "web"]
 channel = "stable-24_05"
 
 [workflows]
-runButton = "Start UberChat"
+runButton = "Start Zenvio"
 
 [[workflows.workflow]]
 name = "Start UberChat"
@@ -14,3 +14,12 @@ mode = "sequential"
 [[workflows.workflow.tasks]]
 task = "shell.exec"
 args = "python3 -m http.server 5000 --bind 0.0.0.0 --directory ."
+
+[[workflows.workflow]]
+name = "Start Zenvio"
+author = 44707040
+mode = "sequential"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "python -m http.server 5000 --bind 0.0.0.0 --directory ."
