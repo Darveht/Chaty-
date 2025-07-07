@@ -30,14 +30,14 @@ let currentUser = null;
 
 // Inicializar usuario desde localStorage si existe
 function initializeUser() {
-    const savedUser = localStorage.getItem('uberchat_user');
+    const savedUser = localStorage.getItem('zenvio_user');
     if (savedUser) {
         try {
             currentUser = JSON.parse(savedUser);
             console.log('Usuario cargado desde localStorage:', currentUser);
         } catch (error) {
             console.error('Error cargando usuario desde localStorage:', error);
-            localStorage.removeItem('uberchat_user');
+            localStorage.removeItem('zenvio_user');
         }
     }
 }
@@ -431,7 +431,7 @@ document.getElementById('language-select').addEventListener('change', async func
         userLanguage = newLanguage;
         
         // Guardar preferencia
-        localStorage.setItem('uberchat_language', newLanguage);
+        localStorage.setItem('zenvio_language', newLanguage);
         
         // Actualizar interfaz en tiempo real
         await updateLanguage();
@@ -1205,7 +1205,7 @@ function verifyCode() {
                     console.log('Usuario guardado en Firebase Database:', currentUser);
 
                     // Guardar en localStorage para persistencia
-                    localStorage.setItem('uberchat_user', JSON.stringify(currentUser));
+                    localStorage.setItem('zenvio_user', JSON.stringify(currentUser));
 
                     // Crear sesión activa
                     createActiveSession(user.uid, user.phoneNumber);
@@ -1316,7 +1316,7 @@ function loadUserContacts() {
                         <p>Usa el botón <strong>+</strong> de arriba para buscar y agregar usuarios por su número de teléfono.</p>
                         <div class="empty-state-tip">
                             <i class="fas fa-lightbulb"></i>
-                            <span>Los usuarios deben estar registrados en UberChat para poder ser encontrados</span>
+                            <span>Los usuarios deben estar registrados en Zenvio para poder ser encontrados</span>
                         </div>
                     </div>
                 `;
@@ -2533,7 +2533,7 @@ function saveProfile() {
                     console.log('Perfil guardado exitosamente en Firebase');
                     
                     // Actualizar localStorage
-                    localStorage.setItem('uberchat_user', JSON.stringify(currentUser));
+                    localStorage.setItem('zenvio_user', JSON.stringify(currentUser));
                     
                     // Actualizar UI
                     document.getElementById('profile-username').textContent = username;
