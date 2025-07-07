@@ -288,6 +288,316 @@ body {
 
 }
 
+/* Pantalla de Splash Animada */
+.splash-container {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100vh;
+    background: linear-gradient(135deg, #000000 0%, #1a1a1a 50%, #000000 100%);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 10000;
+    overflow: hidden;
+}
+
+.splash-container::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: 
+        radial-gradient(circle at 20% 80%, rgba(255, 255, 255, 0.1) 0%, transparent 50%),
+        radial-gradient(circle at 80% 20%, rgba(255, 255, 255, 0.1) 0%, transparent 50%),
+        radial-gradient(circle at 40% 40%, rgba(255, 255, 255, 0.05) 0%, transparent 50%);
+    animation: backgroundShimmer 4s ease-in-out infinite;
+}
+
+@keyframes backgroundShimmer {
+    0%, 100% { opacity: 0.3; }
+    50% { opacity: 0.7; }
+}
+
+.splash-content {
+    text-align: center;
+    position: relative;
+    z-index: 2;
+}
+
+.logo-animation {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    position: relative;
+    margin-bottom: 3rem;
+    height: 120px;
+}
+
+.letter-z {
+    font-size: 8rem;
+    font-weight: 900;
+    color: #ffffff;
+    font-family: 'Arial', sans-serif;
+    text-shadow: 
+        0 0 20px rgba(255, 255, 255, 0.8),
+        0 0 40px rgba(255, 255, 255, 0.6),
+        0 0 60px rgba(255, 255, 255, 0.4);
+    position: relative;
+    z-index: 3;
+    animation: letterZoom 2s ease-out 0.5s both;
+    transform-origin: center;
+}
+
+@keyframes letterZoom {
+    0% {
+        transform: scale(0) rotate(-180deg);
+        opacity: 0;
+    }
+    50% {
+        transform: scale(1.2) rotate(-10deg);
+        opacity: 0.8;
+    }
+    100% {
+        transform: scale(1) rotate(0deg);
+        opacity: 1;
+    }
+}
+
+.glitch-line {
+    position: absolute;
+    top: 50%;
+    left: 0;
+    right: 0;
+    height: 4px;
+    background: linear-gradient(90deg, transparent 0%, #00ff00 20%, #ff0000 40%, #0000ff 60%, #ffff00 80%, transparent 100%);
+    transform: translateY(-50%) scaleX(0);
+    animation: glitchLineAnimation 1.5s ease-out 2.5s both;
+    z-index: 4;
+    box-shadow: 
+        0 0 10px rgba(0, 255, 0, 0.7),
+        0 0 20px rgba(255, 0, 0, 0.5),
+        0 0 30px rgba(0, 0, 255, 0.3);
+}
+
+@keyframes glitchLineAnimation {
+    0% {
+        transform: translateY(-50%) scaleX(0);
+        opacity: 0;
+    }
+    20% {
+        transform: translateY(-50%) scaleX(1);
+        opacity: 1;
+    }
+    40% {
+        transform: translateY(-50%) scaleX(1) skewX(15deg);
+        opacity: 0.8;
+        filter: hue-rotate(90deg);
+    }
+    60% {
+        transform: translateY(-50%) scaleX(1) skewX(-10deg);
+        opacity: 0.9;
+        filter: hue-rotate(180deg);
+    }
+    80% {
+        transform: translateY(-50%) scaleX(1) skewX(5deg);
+        opacity: 0.7;
+        filter: hue-rotate(270deg);
+    }
+    100% {
+        transform: translateY(-50%) scaleX(0);
+        opacity: 0;
+    }
+}
+
+.logo-text {
+    font-size: 4rem;
+    font-weight: 300;
+    color: #ffffff;
+    font-family: 'Arial', sans-serif;
+    margin-left: 1rem;
+    opacity: 0;
+    transform: translateX(-50px);
+    animation: textSlideIn 1s ease-out 3.5s both;
+    text-shadow: 0 2px 20px rgba(255, 255, 255, 0.3);
+}
+
+@keyframes textSlideIn {
+    0% {
+        opacity: 0;
+        transform: translateX(-50px);
+        filter: blur(10px);
+    }
+    50% {
+        opacity: 0.7;
+        transform: translateX(10px);
+        filter: blur(2px);
+    }
+    100% {
+        opacity: 1;
+        transform: translateX(0);
+        filter: blur(0);
+    }
+}
+
+.loading-animation {
+    margin-top: 2rem;
+    opacity: 0;
+    animation: loadingFadeIn 0.8s ease-out 4.5s both;
+}
+
+@keyframes loadingFadeIn {
+    from {
+        opacity: 0;
+        transform: translateY(20px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.loading-dots {
+    display: flex;
+    justify-content: center;
+    gap: 0.8rem;
+}
+
+.dot {
+    width: 12px;
+    height: 12px;
+    background: linear-gradient(45deg, #ffffff, #cccccc);
+    border-radius: 50%;
+    animation: dotPulse 1.5s ease-in-out infinite;
+    box-shadow: 0 0 10px rgba(255, 255, 255, 0.5);
+}
+
+.dot:nth-child(1) { animation-delay: 0s; }
+.dot:nth-child(2) { animation-delay: 0.3s; }
+.dot:nth-child(3) { animation-delay: 0.6s; }
+
+@keyframes dotPulse {
+    0%, 80%, 100% {
+        transform: scale(0.8);
+        opacity: 0.5;
+    }
+    40% {
+        transform: scale(1.2);
+        opacity: 1;
+    }
+}
+
+/* Efectos de glitch adicionales para la Z */
+.letter-z::before,
+.letter-z::after {
+    content: 'Z';
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    opacity: 0;
+}
+
+.letter-z::before {
+    color: #ff0000;
+    animation: glitchRed 0.1s infinite 3s;
+    z-index: -1;
+}
+
+.letter-z::after {
+    color: #00ff00;
+    animation: glitchGreen 0.1s infinite 3.1s;
+    z-index: -2;
+}
+
+@keyframes glitchRed {
+    0%, 90%, 100% {
+        opacity: 0;
+        transform: translate(0);
+    }
+    10% {
+        opacity: 0.8;
+        transform: translate(-2px, 2px);
+    }
+    20% {
+        opacity: 0.9;
+        transform: translate(2px, -2px);
+    }
+}
+
+@keyframes glitchGreen {
+    0%, 90%, 100% {
+        opacity: 0;
+        transform: translate(0);
+    }
+    15% {
+        opacity: 0.7;
+        transform: translate(2px, 2px);
+    }
+    25% {
+        opacity: 0.8;
+        transform: translate(-2px, -2px);
+    }
+}
+
+/* Animación de fade out para toda la pantalla de splash */
+.splash-container.fade-out {
+    animation: splashFadeOut 1s ease-out forwards;
+}
+
+@keyframes splashFadeOut {
+    0% {
+        opacity: 1;
+        transform: scale(1);
+    }
+    100% {
+        opacity: 0;
+        transform: scale(1.1);
+    }
+}
+
+/* Responsive para splash */
+@media (max-width: 768px) {
+    .letter-z {
+        font-size: 6rem;
+    }
+    
+    .logo-text {
+        font-size: 3rem;
+        margin-left: 0.5rem;
+    }
+    
+    .logo-animation {
+        height: 100px;
+        margin-bottom: 2rem;
+    }
+}
+
+@media (max-width: 480px) {
+    .letter-z {
+        font-size: 4.5rem;
+    }
+    
+    .logo-text {
+        font-size: 2.5rem;
+        margin-left: 0.3rem;
+    }
+    
+    .logo-animation {
+        height: 80px;
+        margin-bottom: 1.5rem;
+    }
+    
+    .dot {
+        width: 10px;
+        height: 10px;
+    }
+}
+
 /* Pantalla de Introducción */
 .intro-container {
     flex: 1;
