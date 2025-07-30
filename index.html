@@ -328,6 +328,10 @@
                 <i class="fas fa-camera"></i>
                 <span>Momentos</span>
             </div>
+            <div class="nav-item" onclick="showSection('calls')">
+                <i class="fas fa-phone"></i>
+                <span>Llamadas</span>
+            </div>
             <div class="nav-item" onclick="showSection('settings')">
                 <i class="fas fa-cog"></i>
                 <span>Ajustes</span>
@@ -353,6 +357,12 @@
                     </div>
                 </div>
                 <div class="chat-actions">
+                    <button class="action-btn" onclick="startVideoCall()">
+                        <i class="fas fa-video"></i>
+                    </button>
+                    <button class="action-btn" onclick="startVoiceCall()">
+                        <i class="fas fa-phone"></i>
+                    </button>
                     <button class="action-btn" onclick="showReportModal()">
                         <i class="fas fa-flag"></i>
                     </button>
@@ -525,7 +535,65 @@
         </div>
     </div>
 
-    
+    <!-- Pantalla de Llamada de Voz -->
+    <div id="voice-call-screen" class="screen">
+        <div class="call-container">
+            <div class="call-header">
+                <button class="back-btn-call" onclick="endCall()">
+                    <i class="fas fa-times"></i>
+                </button>
+                <div class="call-status" id="call-status">Llamando...</div>
+            </div>
+
+            <div class="call-content">
+                <div class="call-avatar">
+                    <img id="call-avatar-img" src="" alt="">
+                    <div class="call-animation">
+                        <div class="pulse-ring"></div>
+                        <div class="pulse-ring delay-1"></div>
+                        <div class="pulse-ring delay-2"></div>
+                    </div>
+                </div>
+
+                <div class="call-info">
+                    <h2 id="call-contact-name"></h2>
+                    <div class="call-duration" id="call-duration">00:00</div>
+                </div>
+
+                <div class="translation-info" id="translation-info">
+                    <i class="fas fa-language"></i>
+                    <span>Traducción automática activada</span>
+                    <p>Habla en <strong id="user-lang">español</strong> y tu contacto escuchará en <strong id="contact-lang">inglés</strong></p>
+                </div>
+
+                <div class="speech-visualization">
+                    <div class="speech-indicator" id="speech-indicator">
+                        <div class="bar"></div>
+                        <div class="bar"></div>
+                        <div class="bar"></div>
+                        <div class="bar"></div>
+                        <div class="bar"></div>
+                    </div>
+                    <div class="speech-text" id="speech-text">Toca para hablar</div>
+                </div>
+            </div>
+
+            <div class="call-controls">
+                <button class="control-btn mute-btn" onclick="toggleMute()" id="mute-btn">
+                    <i class="fas fa-microphone"></i>
+                </button>
+                <button class="control-btn speaker-btn" onclick="toggleSpeaker()" id="speaker-btn">
+                    <i class="fas fa-volume-up"></i>
+                </button>
+                <button class="control-btn video-btn" onclick="switchToVideo()">
+                    <i class="fas fa-video"></i>
+                </button>
+                <button class="control-btn end-call-btn" onclick="endCall()">
+                    <i class="fas fa-phone-slash"></i>
+                </button>
+            </div>
+        </div>
+    </div>
 
     <!-- Modal de Reporte -->
     <div id="report-modal" class="modal">
@@ -652,6 +720,10 @@
                 <i class="fas fa-camera"></i>
                 <span>Momentos</span>
             </div>
+            <div class="nav-item" onclick="showSection('calls')">
+                <i class="fas fa-phone"></i>
+                <span>Llamadas</span>
+            </div>
             <div class="nav-item" onclick="showSection('settings')">
                 <i class="fas fa-cog"></i>
                 <span>Ajustes</span>
@@ -759,9 +831,93 @@
         </div>
     </div>
 
-    
+    <!-- Pantalla de Historial de Llamadas -->
+    <div id="calls-history-screen" class="screen">
+        <div class="calls-header">
+            <h2>Llamadas</h2>
+            <button class="clear-history-btn" onclick="clearCallHistory()">
+                <i class="fas fa-trash-alt"></i>
+            </button>
+        </div>
 
-    
+        <div class="calls-list" id="calls-list">
+            <div class="empty-state">
+                <i class="fas fa-phone-slash"></i>
+                <h3>Sin historial de llamadas</h3>
+                <p>Tus llamadas aparecerán aquí</p>
+            </div>
+        </div>
+
+        <!-- Barra de navegación inferior -->
+        <div class="bottom-nav">
+            <div class="nav-item" onclick="showSection('chats')">
+                <i class="fas fa-comments"></i>
+                <span>Chats</span>
+            </div>
+            <div class="nav-item" onclick="showSection('translate')">
+                <i class="fas fa-language"></i>
+                <span>Traducir</span>
+            </div>
+            <div class="nav-item" onclick="showSection('moments')">
+                <i class="fas fa-camera"></i>
+                <span>Momentos</span>
+            </div>
+            <div class="nav-item" onclick="showSection('calls')">
+                <i class="fas fa-phone"></i>
+                <span>Llamadas</span>
+            </div>
+            <div class="nav-item" onclick="showSection('settings')">
+                <i class="fas fa-cog"></i>
+                <span>Ajustes</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- Pantalla de Videollamada -->
+    <div id="video-call-screen" class="screen">
+        <div class="video-call-container">
+            <div class="video-header">
+                <button class="back-btn-call" onclick="endCall()">
+                    <i class="fas fa-times"></i>
+                </button>
+                <div class="call-status" id="video-call-status">Videollamada</div>
+            </div>
+
+            <div class="video-content">
+                <video id="remote-video" class="remote-video" autoplay muted>
+                    <!-- Simulación de video remoto -->
+                </video>
+                <div class="video-placeholder">
+                    <img id="video-avatar" src="" alt="">
+                    <div class="video-name" id="video-contact-name"></div>
+                </div>
+
+                <video id="local-video" class="local-video" autoplay muted></video>
+
+                <div class="video-translation-info">
+                    <i class="fas fa-language"></i>
+                    <span>Traducción en tiempo real</span>
+                </div>
+
+                <div class="video-speech-text" id="video-speech-text"></div>
+            </div>
+
+            <div class="video-controls">
+                <button class="control-btn video-mute-btn" onclick="toggleVideoMute()" id="video-mute-btn">
+                    <i class="fas fa-microphone"></i>
+                </button>
+                <button class="control-btn camera-btn" onclick="toggleCamera()" id="camera-btn">
+                    <i class="fas fa-video"></i>
+                </button>
+                <button class="control-btn switch-audio-btn" onclick="switchToAudio()">
+                    <i class="fas fa-phone"></i>
+                </button>
+                <button class="control-btn end-video-call-btn" onclick="endCall()">
+                    <i class="fas fa-phone-slash"></i>
+                </button>
+            </div>
+        </div>
+    </div>
 
      <!-- Settings Screen -->
      <div id="settings-screen" class="screen">
@@ -839,7 +995,20 @@
                             </div>
                         </div>
 
-                        
+                        <div class="setting-item">
+                            <div class="setting-icon">
+                                <i class="fas fa-phone"></i>
+                            </div>
+                            <div class="setting-info">
+                                <div class="setting-title">Notificaciones de Llamadas</div>
+                                <div class="setting-description">Recibir alertas de llamadas entrantes</div>
+                            </div>
+                            <div class="setting-toggle">
+                                <div class="toggle-switch active" onclick="toggleCallNotifications(this)">
+                                    <div class="toggle-slider"></div>
+                                </div>
+                            </div>
+                        </div>
                     </div>
 
                     <div class="settings-group">
@@ -933,6 +1102,10 @@
             <div class="nav-item" onclick="showSection('moments')">
                 <i class="fas fa-camera"></i>
                 <span>Momentos</span>
+            </div>
+            <div class="nav-item" onclick="showSection('calls')">
+                <i class="fas fa-phone"></i>
+                <span>Llamadas</span>
             </div>
             <div class="nav-item active" onclick="showSection('settings')">
                 <i class="fas fa-cog"></i>
